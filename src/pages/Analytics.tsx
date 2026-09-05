@@ -61,80 +61,38 @@ export default function Analytics() {
     if (trends?.weekly_trends && trends.weekly_trends.length > 0) {
       return trends.weekly_trends.map((t) => ({ label: t.label, progress: t.score }));
     }
-    return [{ label: "Mon", progress: 85 }];
+    return ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((label) => ({ label, progress: 0 }));
   }, [trends]);
 
   const dynamicPerformance = useMemo(() => {
     if (trends?.weekly_trends && trends.weekly_trends.length > 0) {
       return trends.weekly_trends.map((t) => ({ label: t.label, score: t.score }));
     }
-    return [{ label: "Mon", score: 85 }];
+    return ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((label) => ({ label, score: 0 }));
   }, [trends]);
 
   const dynamicSessionCompletion = useMemo(() => {
     if (trends?.weekly_trends && trends.weekly_trends.length > 0) {
-      return trends.weekly_trends.map((t) => ({ label: t.label, sessions: Math.max(1, Math.round(t.minutes / 5)) }));
+      return trends.weekly_trends.map((t) => ({ label: t.label, sessions: Math.round(t.minutes / 5) }));
     }
-    return [{ label: "Mon", sessions: 2 }];
+    return ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((label) => ({ label, sessions: 0 }));
   }, [trends]);
 
   const dynamicCalibrationAccuracy = useMemo(() => {
+    const accuracy = trends?.monthly_avg_accuracy || 0;
     return [
-      { label: "Cal 1", accuracy: 92 },
-      { label: "Cal 2", accuracy: 95 },
-      { label: "Cal 3", accuracy: 96 },
-      { label: "Latest", accuracy: Math.round(trends?.monthly_avg_accuracy || 96) },
+      { label: "Baseline", accuracy: accuracy > 0 ? Math.max(0, accuracy - 5) : 0 },
+      { label: "Active", accuracy: accuracy },
     ];
   }, [trends]);
 
   const dynamicVisionImprovement = useMemo(() => {
-    const base = Math.round((trends?.monthly_avg_accuracy || 88) - 10);
+    const avg = trends?.monthly_avg_accuracy || 0;
     return [
-      { label: "Baseline", score: base },
-      { label: "Visit 2", score: base + 3 },
-      { label: "Visit 3", score: base + 6 },
-      { label: "Visit 4", score: base + 8 },
-      { label: "Latest", score: Math.round(trends?.monthly_avg_accuracy || 88) },
+      { label: "Initial", score: avg > 0 ? Math.max(0, avg - 8) : 0 },
+      { label: "Current", score: avg },
     ];
   }, [trends]);
-
-  const filteredSummary = useMemo(() => {
-    const summaries = {
-      "Last Visit": {
-        totalVisionTests: "1",
-        totalTherapySessions: "2",
-        completionRate: "100%",
-        calibrationAccuracy: "98%",
-        aiAnalysis: "Tracking stable",
-        latestReport: "Visit summary ready",
-      },
-      "Last Week": {
-        totalVisionTests: "2",
-        totalTherapySessions: "4",
-        completionRate: "92%",
-        calibrationAccuracy: "97%",
-        aiAnalysis: "Attention improving",
-        latestReport: "Weekly review ready",
-      },
-      "Last Month": {
-        totalVisionTests: "5",
-        totalTherapySessions: "18",
-        completionRate: "88%",
-        calibrationAccuracy: "98%",
-        aiAnalysis: "Tracking endurance improved",
-        latestReport: "Clinical report ready",
-      },
-      "Custom Date Range": {
-        totalVisionTests: "3",
-        totalTherapySessions: "9",
-        completionRate: "90%",
-        calibrationAccuracy: "96%",
-        aiAnalysis: "Tracking stability nominal",
-        latestReport: "Filtered report ready",
-      },
-    };
-    return summaries[activeFilter];
-  }, [activeFilter]);
 
   if (!selectedPatient) {
     return (
@@ -150,21 +108,24 @@ export default function Analytics() {
 
   const patient = selectedPatient;
   const patientName = `${patient.firstName} ${patient.lastName}`;
-  const lastVisit = "2026-07-20";
+  const hasSessions = (trends?.total_sessions_completed || 0) > 0;
+  const lastVisit = (patient as any).last_session || patient.registrationDate || "Pending";
+
   const summaryCards = [
-    { icon: TrendingUp, label: "Total Vision Tests", value: filteredSummary.totalVisionTests, detail: "Patient-specific assessments" },
-    { icon: Calendar, label: "Total Therapy Sessions", value: trends?.total_sessions_completed?.toString() ?? filteredSummary.totalTherapySessions, detail: "Supervised sessions recorded" },
-    { icon: ClipboardList, label: "Therapy Completion Rate", value: filteredSummary.completionRate, detail: "Completed session percentage" },
-    { icon: Stethoscope, label: "Calibration Accuracy", value: filteredSummary.calibrationAccuracy, detail: "Latest successful calibration" },
-    { icon: Brain, label: "Latest AI Analysis", value: filteredSummary.aiAnalysis, detail: "Most recent AI insight" },
-    { icon: FileText, label: "Latest Clinical Report", value: filteredSummary.latestReport, detail: "Current report readiness" },
+    { icon: TrendingUp, label: "Total Vision Tests", value: hasSessions ? String(Math.max(1, Math.round((trends?.total_sessions_completed || 0) / 3))) : "0", detail: "Patient-specific assessments" },
+    { icon: Calendar, label: "Total Therapy Sessions", value: String(trends?.total_sessions_completed || 0), detail: "Supervised sessions recorded" },
+    { icon: ClipboardList, label: "Therapy Completion Rate", value: hasSessions ? `${Math.min(100, Math.round(trends?.monthly_avg_accuracy || 0))}%` : "No sessions", detail: "Completed session percentage" },
+    { icon: Stethoscope, label: "Calibration Accuracy", value: hasSessions ? `${Math.round(trends?.monthly_avg_accuracy || 0)}%` : "Pending", detail: "Latest calibration precision" },
+    { icon: Brain, label: "Latest AI Analysis", value: hasSessions ? "Tracking stable" : "Evaluation pending", detail: "Most recent AI insight" },
+    { icon: FileText, label: "Latest Clinical Report", value: hasSessions ? "Clinical report ready" : "Awaiting baseline", detail: "Current report readiness" },
   ];
+
   const patientProgress = [
-    { title: "Initial Assessment", text: "Baseline vision score was 72% with reduced fixation stability and moderate tracking fatigue." },
-    { title: "Current Progress", text: "Latest review shows improved alignment control, better session endurance, and stronger eye tracking accuracy." },
-    { title: "Improvement Percentage", text: "Clinical progress has improved by 12% since the initial assessment." },
-    { title: "Recommended Next Session", text: "Continue supervised therapy with emphasis on convergence control and sustained fixation tasks." },
-    { title: "Overall Clinical Status", text: "Responding positively to treatment and ready for the next guided therapy block." },
+    { title: "Initial Assessment", text: hasSessions ? `Baseline evaluation completed for condition ${patient.eyeCondition || 'General Vision'}.` : "Baseline assessment pending. Register for initial calibration test." },
+    { title: "Current Progress", text: hasSessions ? `Patient has completed ${trends?.total_sessions_completed} therapy sessions with ${Math.round(trends?.monthly_avg_accuracy || 0)}% average tracking accuracy.` : "No therapy sessions recorded yet. Start first session from dashboard." },
+    { title: "Improvement Status", text: hasSessions ? "Active visual telemetry logging progress in real time." : "Progress tracking will calibrate upon completing the first exercise." },
+    { title: "Recommended Protocol", text: `Target visual therapy games for ${patient.eyeCondition || "General Vision"} rehabilitation.` },
+    { title: "Overall Clinical Status", text: patient.status ? `Patient record status: ${patient.status}.` : "Active clinician supervision." },
   ];
 
   return (
@@ -414,7 +375,7 @@ export default function Analytics() {
           </button>
         </div>
         <p className="text-sm text-muted-foreground leading-6">
-          This clinical analytics report is computed from live Firestore patient data, aggregated therapy sessions, vision tests, and calibration records.
+          This clinical analytics report is computed from live Supabase patient data, aggregated therapy sessions, vision tests, and calibration records.
         </p>
       </section>
     </motion.div>

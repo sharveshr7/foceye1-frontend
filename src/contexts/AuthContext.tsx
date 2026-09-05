@@ -8,7 +8,6 @@ interface AuthContextType {
   isLoading: boolean;
   login: (data: LoginData) => Promise<UserProfile>;
   signup: (data: SignupData) => Promise<UserProfile>;
-  signInWithGoogle: () => Promise<UserProfile>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }
@@ -71,13 +70,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return signedUser;
   };
 
-  const signInWithGoogle = async (): Promise<UserProfile> => {
-    const res = await authService.signInWithGoogle();
-    const googleUser = res.user || authService.getUser()!;
-    setUser(googleUser);
-    return googleUser;
-  };
-
   const logout = async (): Promise<void> => {
     await authService.logout();
     setUser(null);
@@ -96,7 +88,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isLoading,
         login,
         signup,
-        signInWithGoogle,
         logout,
         refreshUser,
       }}

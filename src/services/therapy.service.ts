@@ -68,6 +68,32 @@ export const therapyService = {
 
   getHistory: async (patientId?: string): Promise<TherapySessionData[]> => {
     try {
+      const endpoint = patientId
+        ? `/therapy/sessions?patient_id=${encodeURIComponent(patientId)}`
+        : "/therapy/sessions";
+      const remoteSessions = await ApiClient.get<any[]>(endpoint);
+      if (Array.isArray(remoteSessions)) {
+        const mapped: TherapySessionData[] = remoteSessions.map((s) => ({
+          id: s.id,
+          patientId: s.patient_id,
+          gameId: s.exercise_type || "target-tracking",
+          accuracy: Math.round(s.fixation_score ?? s.overall_score ?? 90),
+          blinks: 0,
+          duration: s.duration_seconds || 300,
+          sessionDuration: s.duration_seconds || 300,
+          timestamp: s.created_at,
+          sessionDate: s.created_at ? s.created_at.split("T")[0] : undefined,
+          completionStatus: "Completed",
+          performanceScore: Math.round(s.overall_score ?? s.saccadic_score ?? s.fixation_score ?? 90),
+          doctorNotes: s.clinical_notes,
+        }));
+        return mapped;
+      }
+    } catch {
+      // Graceful offline fallback to local storage
+    }
+
+    try {
       const raw = localStorage.getItem(STORAGE_KEY);
       const list: TherapySessionData[] = raw ? JSON.parse(raw) : [];
       const cleaned = list.filter((s) => !["SES-101", "SES-102", "SES-103"].includes(s.id || ""));

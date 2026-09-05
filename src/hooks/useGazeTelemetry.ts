@@ -57,10 +57,24 @@ export function useGazeTelemetry(
   const isSimulatingRef = useRef<boolean>(false);
 
   // Compute target WS URL
-  const resolvedWsUrl =
-    wsUrl ||
-    (typeof import.meta !== "undefined" && import.meta.env?.VITE_WS_URL) ||
-    `ws://${typeof window !== "undefined" ? window.location.hostname || "localhost" : "localhost"}:8000/ws/gaze/${sessionId}`;
+  const resolvedWsUrl = (() => {
+    if (wsUrl) return wsUrl;
+    const customWs = typeof import.meta !== "undefined" ? import.meta.env?.VITE_WS_URL : undefined;
+    if (customWs) {
+      return customWs.includes("/ws/gaze") ? customWs : `${customWs.replace(/\/+$/, "")}/ws/gaze/${sessionId}`;
+    }
+    const apiUrl = typeof import.meta !== "undefined" ? (import.meta.env?.VITE_API_URL || "").trim() : "";
+    if (apiUrl) {
+      const clean = apiUrl.replace(/\/api\/v1\/?$/, "").replace(/\/+$/, "");
+      const proto = clean.startsWith("https") ? "wss" : "ws";
+      const host = clean.replace(/^https?:\/\//, "");
+      return `${proto}://${host}/ws/gaze/${sessionId}`;
+    }
+    const host = typeof window !== "undefined" ? window.location.hostname || "localhost" : "localhost";
+    const port = host === "localhost" || host === "127.0.0.1" ? ":8000" : "";
+    const proto = typeof window !== "undefined" && window.location.protocol === "https:" ? "wss:" : "ws:";
+    return `${proto}://${host}${port}/ws/gaze/${sessionId}`;
+  })();
 
   // Start simulation loop (used when WS is unavailable or disconnected)
   const startSimulation = useCallback(() => {

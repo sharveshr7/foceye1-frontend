@@ -3,9 +3,21 @@
  * Connects to FastAPI Backend at http://localhost:8000/api/v1 with graceful fallback.
  */
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
-
 export class ApiClient {
+  static getBaseUrl(): string {
+    const raw = (import.meta.env.VITE_API_URL || '').trim();
+    if (!raw) {
+      if (typeof window !== 'undefined') {
+        const hostname = window.location.hostname;
+        if (hostname === 'localhost' || hostname === '127.0.0.1') {
+          return 'http://localhost:8000/api/v1';
+        }
+      }
+      return '/api/v1';
+    }
+    const clean = raw.replace(/\/+$/, '');
+    return clean.endsWith('/api/v1') ? clean : `${clean}/api/v1`;
+  }
   private static token: string | null =
     localStorage.getItem('foceye_auth_token') || localStorage.getItem('foceye_token');
 
@@ -55,7 +67,7 @@ export class ApiClient {
   }
 
   static async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-    const url = `${API_BASE_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
+    const url = `${this.getBaseUrl()}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       ...((options.headers as Record<string, string>) || {}),

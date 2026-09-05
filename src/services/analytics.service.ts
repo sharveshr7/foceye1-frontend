@@ -32,8 +32,8 @@ export const analyticsService = {
     let totalAccuracy = 0;
 
     sessions.forEach((s) => {
-      totalMinutes += Math.round((s.sessionDuration || s.duration || 300) / 60);
-      totalAccuracy += s.performanceScore || s.accuracy || 88;
+      totalMinutes += Math.round((s.sessionDuration || s.duration || 0) / 60);
+      totalAccuracy += s.performanceScore ?? s.accuracy ?? 0;
     });
 
     const avgScore = totalSessions > 0 ? Math.round(totalAccuracy / totalSessions) : 0;
@@ -41,7 +41,7 @@ export const analyticsService = {
 
     return {
       vision_score: avgScore,
-      vision_score_change_pct: totalSessions > 0 ? 0 : 0,
+      vision_score_change_pct: 0,
       daily_progress_minutes: dailyProgress,
       daily_target_minutes: 30,
       next_milestone_title: totalSessions > 5 ? "Advanced Binocular Fusion" : "Initial Baseline Calibration",
@@ -61,8 +61,8 @@ export const analyticsService = {
     let totalCount = 0;
 
     sessions.forEach((s) => {
-      const score = s.performanceScore || s.accuracy || 88;
-      const mins = Math.round((s.sessionDuration || s.duration || 300) / 60);
+      const score = s.performanceScore ?? s.accuracy ?? 0;
+      const mins = Math.round((s.sessionDuration || s.duration || 0) / 60);
       totalAccuracy += score;
       totalCount++;
 

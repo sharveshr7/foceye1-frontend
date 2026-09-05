@@ -92,44 +92,6 @@ export default function Patients() {
     setIsFormOpen(true);
   };
 
-  const handleQuickPrefill = () => {
-    const samples = [
-      {
-        firstName: "Alexander",
-        lastName: "Wright",
-        age: 34,
-        gender: "Male",
-        dateOfBirth: "1992-05-18",
-        phone: "+1 (555) 789-0123",
-        email: "a.wright@example.com",
-        address: "88 Market St, San Francisco, CA",
-        eyeCondition: "Binocular Vision Dysfunction",
-        diagnosis: "Vertical heterophoria with reading fatigue",
-        assignedDoctor: "Dr. Rachel Evans, MD",
-        medicalHistory: "Complaints of headaches and words jumping while reading.",
-        notes: "Recommended 10 sessions of binocular fusion therapy.",
-      },
-      {
-        firstName: "Maya",
-        lastName: "Patel",
-        age: 14,
-        gender: "Female",
-        dateOfBirth: "2012-08-30",
-        phone: "+1 (555) 654-3210",
-        email: "patel.family@example.com",
-        address: "304 University Ave, Palo Alto, CA",
-        eyeCondition: "Lazy Eye (Amblyopia)",
-        diagnosis: "Right eye strabismic amblyopia",
-        assignedDoctor: "Dr. Marcus Vance, OD",
-        medicalHistory: "Early childhood patching therapy with incomplete recovery.",
-        notes: "Focus on high-contrast stimuli and active visual tracking.",
-      },
-    ];
-    const picked = samples[Math.floor(Math.random() * samples.length)];
-    setForm((prev) => ({ ...prev, ...picked }));
-    toast.info("Prefilled sample patient details!");
-  };
-
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
 
@@ -182,12 +144,12 @@ export default function Patients() {
   const handleClearAll = async () => {
     if (
       window.confirm(
-        "⚠️ Are you sure you want to delete ALL patients from Firebase Firestore? This will clear all records so you can add fresh patient data."
+        "⚠️ Are you sure you want to delete ALL patients from the clinical database? This will clear all records so you can add fresh patient data."
       )
     ) {
       try {
         await clearAllPatients();
-        toast.success("All patient records cleared from Firebase database.");
+        toast.success("All patient records cleared from clinical database.");
       } catch (err: unknown) {
         toast.error(err instanceof Error ? err.message : "Failed to clear database.");
       }
@@ -453,16 +415,6 @@ export default function Patients() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  {!editing && (
-                    <button
-                      type="button"
-                      onClick={handleQuickPrefill}
-                      title="Quick fill sample data"
-                      className="px-2.5 py-1 bg-secondary/10 text-secondary hover:bg-secondary/20 rounded-lg text-xs font-bold flex items-center gap-1 transition-colors"
-                    >
-                      <Sparkles size={13} /> Auto-fill
-                    </button>
-                  )}
                   <button
                     onClick={() => setIsFormOpen(false)}
                     className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted"

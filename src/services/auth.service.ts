@@ -183,22 +183,6 @@ export const authService = {
     }
   },
 
-  signInWithGoogle: async (): Promise<AuthResponse> => {
-    const token = `local_jwt_${Date.now()}`;
-    const userProfile: UserProfile = {
-      id: `google_user_${Date.now()}`,
-      email: "clinician.google@foceyehospital.com",
-      full_name: "Dr. Sarah Jenkins, OD",
-      displayName: "Dr. Sarah Jenkins, OD",
-      hospital_name: "FOCEYE Vision Hospital",
-      role: "clinician",
-    };
-
-    ApiClient.setToken(token);
-    localStorage.setItem("foceye_user", JSON.stringify(userProfile));
-
-    return { access_token: token, token_type: "bearer", expires_in: 86400, user: userProfile };
-  },
 
   getUser: (): UserProfile | null => {
     try {

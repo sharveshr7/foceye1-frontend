@@ -3,7 +3,7 @@
  * Connects to FastAPI Backend /api/v1/reports/pdf to generate and stream formal clinical PDF documents.
  */
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1";
+import { ApiClient } from "./api.client";
 
 export interface ReportGenerationOptions {
   patientId: string;
@@ -18,9 +18,9 @@ export const reportService = {
    */
   async downloadPatientPdf(options: ReportGenerationOptions): Promise<boolean> {
     try {
-      const token = localStorage.getItem("foceye_auth_token") || localStorage.getItem("foceye_token");
+      const token = ApiClient.getToken();
 
-      const response = await fetch(`${API_BASE_URL}/reports/pdf`, {
+      const response = await fetch(`${ApiClient.getBaseUrl()}/reports/pdf`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

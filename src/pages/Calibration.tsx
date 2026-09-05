@@ -240,7 +240,7 @@ export default function Calibration() {
   const saveCalibration = () => {
     setSaveReady(true);
     setLastUpdated(new Date());
-    toast.success("Patient calibration saved to Firestore!");
+    toast.success("Patient calibration saved successfully!");
   };
 
   const nextStep = () => {
