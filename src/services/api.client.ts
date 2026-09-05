@@ -6,22 +6,30 @@
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
 
 export class ApiClient {
-  private static token: string | null = localStorage.getItem('foceye_auth_token');
+  private static token: string | null =
+    localStorage.getItem('foceye_auth_token') || localStorage.getItem('foceye_token');
 
   static setToken(token: string | null) {
     this.token = token;
     if (token) {
       localStorage.setItem('foceye_auth_token', token);
+      localStorage.setItem('foceye_token', token);
     } else {
       localStorage.removeItem('foceye_auth_token');
+      localStorage.removeItem('foceye_token');
     }
   }
 
   static getToken(): string | null {
     if (!this.token) {
-      this.token = localStorage.getItem('foceye_auth_token');
+      this.token =
+        localStorage.getItem('foceye_auth_token') || localStorage.getItem('foceye_token');
     }
     return this.token;
+  }
+
+  static isAuthenticated(): boolean {
+    return Boolean(this.getToken());
   }
 
   static async get<T>(endpoint: string): Promise<T> {
@@ -64,6 +72,9 @@ export class ApiClient {
     });
 
     if (!response.ok) {
+      if (response.status === 401 && typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('foceye:unauthorized'));
+      }
       const errorBody = await response.text();
       let errorMsg = `API Error ${response.status}: ${response.statusText}`;
       try {

@@ -28,8 +28,10 @@ import {
   Loader2,
   Save,
   Database,
+  LogOut,
 } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   staffService,
   StaffMember,
@@ -38,6 +40,7 @@ import {
   StaffStatus,
 } from "@/services/staff.service";
 import { authService } from "@/services/auth.service";
+import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { DataBackupModal } from "@/components/settings/DataBackupModal";
 
@@ -117,6 +120,8 @@ const actionClass =
   "rounded-xl px-4 py-2 text-sm font-semibold transition-all cursor-pointer shadow-sm";
 
 export default function SettingsPage() {
+  const navigate = useNavigate();
+  const { logout } = useAuth();
   const [loadingStaff, setLoadingStaff] = useState(true);
   const [staffList, setStaffList] = useState<StaffMember[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -760,6 +765,22 @@ export default function SettingsPage() {
             className="px-3.5 py-1.5 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
           >
             <Database size={14} /> Manage JSON Backups
+          </button>
+        </SettingRow>
+
+        <SettingRow
+          title="Active Clinician Session"
+          description="Sign out of this clinical terminal and clear cached authentication tokens"
+        >
+          <button
+            onClick={async () => {
+              await logout();
+              toast.success("Signed out of clinical station.");
+              navigate("/login");
+            }}
+            className="px-3.5 py-1.5 bg-destructive/10 hover:bg-destructive/20 text-destructive border border-destructive/20 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
+          >
+            <LogOut size={14} /> Sign Out of Station
           </button>
         </SettingRow>
       </section>

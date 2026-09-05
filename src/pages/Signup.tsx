@@ -17,12 +17,19 @@ import {
   ArrowRight,
   Loader2,
 } from "lucide-react";
-import { useState, useMemo } from "react";
-import { authService } from "@/services/auth.service";
+import { useState, useMemo, useEffect } from "react";
+import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 
 export default function Signup() {
   const navigate = useNavigate();
+  const { signup, signInWithGoogle, isAuthenticated } = useAuth();
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate("/dashboard", { replace: true });
+    }
+  }, [isAuthenticated, navigate]);
   const [form, setForm] = useState({
     hospitalName: "",
     administratorName: "",
@@ -129,7 +136,7 @@ export default function Signup() {
     setSubmitting(true);
 
     try {
-      await authService.signup({
+      await signup({
         email: form.officialHospitalEmail.trim(),
         password: form.password,
         full_name: form.administratorName.trim(),
@@ -156,7 +163,7 @@ export default function Signup() {
     setError("");
     setSubmitting(true);
     try {
-      await authService.signInWithGoogle();
+      await signInWithGoogle();
       toast.success("Authenticated with Google! Redirecting...");
       navigate("/dashboard");
     } catch (cause: unknown) {

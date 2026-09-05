@@ -16,7 +16,10 @@ import {
   ShieldCheck,
   Stethoscope,
   Activity,
+  LogOut,
 } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "sonner";
 
 interface MenuItem {
   id: string;
@@ -63,6 +66,7 @@ export function AppSidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
+  const { logout } = useAuth();
 
   return (
     <aside
@@ -139,7 +143,7 @@ export function AppSidebar() {
       </nav>
 
       {/* Clinical Station Status Pill */}
-      <div className="p-3 border-t border-slate-100 dark:border-slate-800">
+      <div className="p-3 border-t border-slate-100 dark:border-slate-800 space-y-2">
         <div
           className={`bg-slate-50 dark:bg-slate-900/60 rounded-xl p-3 border border-slate-200/80 dark:border-slate-800 ${
             collapsed ? "text-center px-1" : ""
@@ -159,6 +163,22 @@ export function AppSidebar() {
             </p>
           )}
         </div>
+
+        {/* Quick Sign Out Button */}
+        <button
+          onClick={async () => {
+            await logout();
+            toast.success("Signed out of clinical station.");
+            navigate("/login");
+          }}
+          className={`w-full py-2 px-3 rounded-xl border border-destructive/20 text-destructive hover:bg-destructive/10 transition-colors flex items-center justify-center gap-2 text-xs font-bold cursor-pointer ${
+            collapsed ? "px-1.5" : ""
+          }`}
+          title="Sign Out of Station"
+        >
+          <LogOut size={14} />
+          {!collapsed && <span>Sign Out</span>}
+        </button>
       </div>
 
       {/* Collapse toggle button */}

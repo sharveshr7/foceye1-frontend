@@ -38,7 +38,7 @@ export const therapyService = {
     // 1. Sync with FastAPI Backend
     if (sessionData.patientId) {
       try {
-        await ApiClient.post("/therapy/session", {
+        await ApiClient.post("/therapy/sessions", {
           patient_id: sessionData.patientId,
           exercise_type: sessionData.gameId,
           duration_seconds: sessionData.duration || 300,

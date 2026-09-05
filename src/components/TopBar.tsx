@@ -1,14 +1,25 @@
 import { useState } from "react";
-import { Battery, Bell, Search, UserRound, ChevronDown, Check, Sparkles } from "lucide-react";
+import { Battery, Bell, Search, UserRound, ChevronDown, Check, Sparkles, LogOut, Settings, User } from "lucide-react";
 import { usePatient } from "@/contexts/PatientContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 
 export function TopBar() {
   const { patients, selectedPatient, selectPatient } = usePatient();
+  const { user, logout } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
   const [isPatientDropdownOpen, setIsPatientDropdownOpen] = useState(false);
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const navigate = useNavigate();
+
+  const handleSignOut = async () => {
+    setIsProfileMenuOpen(false);
+    await logout();
+    toast.success("Signed out of clinical station.");
+    navigate("/login");
+  };
 
   const matchingPatients = searchQuery.trim()
     ? patients.filter((p) =>
@@ -144,18 +155,75 @@ export function TopBar() {
           </div>
         </div>
 
-        {/* Profile Avatar */}
-        <div
-          onClick={() => navigate("/profile")}
-          className="w-10 h-10 bg-primary/10 rounded-2xl border border-border shadow-soft overflow-hidden cursor-pointer hover:scale-105 transition-transform shrink-0 flex items-center justify-center text-primary font-black"
-          role="button"
-          title="Clinician Profile"
-        >
-          <img
-            src="https://api.dicebear.com/7.x/avataaars/svg?seed=Leo"
-            alt="User Profile"
-            className="w-full h-full"
-          />
+        {/* Clinician Profile Dropdown */}
+        <div className="relative">
+          <button
+            onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
+            className="flex items-center gap-2.5 p-1 rounded-2xl hover:bg-muted/60 transition-colors cursor-pointer"
+            aria-label="Clinician Account Menu"
+          >
+            <div className="w-10 h-10 bg-primary/10 rounded-2xl border border-border shadow-soft overflow-hidden shrink-0 flex items-center justify-center text-primary font-black text-sm">
+              {user?.full_name ? user.full_name[0].toUpperCase() : "Dr"}
+            </div>
+            <div className="hidden xl:block text-left">
+              <p className="text-xs font-bold text-foreground leading-tight truncate max-w-[120px]">
+                {user?.full_name || "Dr. Sarah Smith"}
+              </p>
+              <p className="text-[10px] text-muted-foreground leading-tight truncate max-w-[120px]">
+                {user?.hospital_name || "FOCEYE Clinic"}
+              </p>
+            </div>
+            <ChevronDown size={13} className="text-muted-foreground hidden sm:block" />
+          </button>
+
+          {/* Clinician Popover Menu */}
+          {isProfileMenuOpen && (
+            <div className="absolute right-0 mt-2 w-64 bg-card border border-border rounded-2xl shadow-2xl p-2 z-50 space-y-1">
+              <div className="px-3 py-2 border-b border-border/60">
+                <p className="text-xs font-bold text-foreground truncate">
+                  {user?.full_name || "Clinical Specialist"}
+                </p>
+                <p className="text-[10px] text-muted-foreground truncate">{user?.email || "clinician@foceye.clinic"}</p>
+                <span className="inline-block mt-1 text-[9px] font-bold px-2 py-0.5 rounded-md bg-primary/10 text-primary uppercase font-mono">
+                  {user?.role || "Clinician"} · Verified
+                </span>
+              </div>
+
+              <div className="pt-1 space-y-0.5">
+                <button
+                  onClick={() => {
+                    setIsProfileMenuOpen(false);
+                    navigate("/profile");
+                  }}
+                  className="w-full px-3 py-2 text-left text-xs font-medium hover:bg-muted rounded-xl flex items-center gap-2 text-foreground transition-colors cursor-pointer"
+                >
+                  <User size={14} className="text-muted-foreground" />
+                  Clinician Profile
+                </button>
+
+                <button
+                  onClick={() => {
+                    setIsProfileMenuOpen(false);
+                    navigate("/settings");
+                  }}
+                  className="w-full px-3 py-2 text-left text-xs font-medium hover:bg-muted rounded-xl flex items-center gap-2 text-foreground transition-colors cursor-pointer"
+                >
+                  <Settings size={14} className="text-muted-foreground" />
+                  Hospital Settings
+                </button>
+
+                <div className="border-t border-border/60 my-1" />
+
+                <button
+                  onClick={handleSignOut}
+                  className="w-full px-3 py-2 text-left text-xs font-bold hover:bg-destructive/10 text-destructive rounded-xl flex items-center gap-2 transition-colors cursor-pointer"
+                >
+                  <LogOut size={14} />
+                  Sign Out
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </header>

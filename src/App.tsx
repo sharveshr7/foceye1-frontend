@@ -35,36 +35,47 @@ const queryClient = new QueryClient({
   },
 });
 
+import { AuthProvider } from "./contexts/AuthContext";
+import { ProtectedRoute } from "./components/ProtectedRoute";
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <Toaster />
       <Sonner />
-      <PatientProvider>
-        <BrowserRouter>
-          <Suspense fallback={<LoadingScreen />}>
-            <Routes>
-              <Route path="/" element={<Welcome />} />
-              <Route path="/login" element={<Login />} />
-              <Route path="/signup" element={<Signup />} />
-              <Route element={<AppLayout />}>
-                <Route path="/dashboard" element={<Dashboard />} />
-                <Route path="/patients" element={<Patients />} />
-                <Route path="/mode-selection" element={<TherapySelection />} />
-                <Route path="/therapy-session" element={<TherapySession />} />
-                <Route path="/device" element={<DeviceDashboard />} />
-                <Route path="/vision-test" element={<VisionTest />} />
-                <Route path="/calibration" element={<Calibration />} />
-                <Route path="/ai-insights" element={<AIInsights />} />
-                <Route path="/analytics" element={<Analytics />} />
-                <Route path="/profile" element={<Profile />} />
-                <Route path="/settings" element={<SettingsPage />} />
-              </Route>
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </Suspense>
-        </BrowserRouter>
-      </PatientProvider>
+      <AuthProvider>
+        <PatientProvider>
+          <BrowserRouter>
+            <Suspense fallback={<LoadingScreen />}>
+              <Routes>
+                <Route path="/" element={<Welcome />} />
+                <Route path="/login" element={<Login />} />
+                <Route path="/signup" element={<Signup />} />
+                <Route
+                  element={
+                    <ProtectedRoute>
+                      <AppLayout />
+                    </ProtectedRoute>
+                  }
+                >
+                  <Route path="/dashboard" element={<Dashboard />} />
+                  <Route path="/patients" element={<Patients />} />
+                  <Route path="/mode-selection" element={<TherapySelection />} />
+                  <Route path="/therapy-session" element={<TherapySession />} />
+                  <Route path="/device" element={<DeviceDashboard />} />
+                  <Route path="/vision-test" element={<VisionTest />} />
+                  <Route path="/calibration" element={<Calibration />} />
+                  <Route path="/ai-insights" element={<AIInsights />} />
+                  <Route path="/analytics" element={<Analytics />} />
+                  <Route path="/profile" element={<Profile />} />
+                  <Route path="/settings" element={<SettingsPage />} />
+                </Route>
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </Suspense>
+          </BrowserRouter>
+        </PatientProvider>
+      </AuthProvider>
     </TooltipProvider>
   </QueryClientProvider>
 );

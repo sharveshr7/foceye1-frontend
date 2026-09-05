@@ -1,17 +1,28 @@
 import { motion } from "framer-motion";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, useLocation, Link } from "react-router-dom";
 import { Eye, EyeOff, Mail, Lock, ArrowRight, Loader2, AlertCircle } from "lucide-react";
-import { useState } from "react";
-import { authService } from "@/services/auth.service";
+import { useState, useEffect } from "react";
+import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 
 export default function Login() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const { login, signInWithGoogle, isAuthenticated } = useAuth();
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  const redirectPath = (location.state as any)?.from?.pathname || "/dashboard";
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate(redirectPath, { replace: true });
+    }
+  }, [isAuthenticated, navigate, redirectPath]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,9 +44,9 @@ export default function Login() {
     setSubmitting(true);
 
     try {
-      await authService.login({ email: email.trim(), password });
+      await login({ email: email.trim(), password });
       toast.success("Authenticated successfully! Loading clinical dashboard...");
-      navigate("/dashboard");
+      navigate(redirectPath, { replace: true });
     } catch (cause: unknown) {
       const message = cause instanceof Error ? cause.message : "Invalid clinician credentials or unauthorized facility access.";
       setError(message);
@@ -49,9 +60,9 @@ export default function Login() {
     setError("");
     setSubmitting(true);
     try {
-      await authService.signInWithGoogle();
+      await signInWithGoogle();
       toast.success("Authenticated with Google! Loading dashboard...");
-      navigate("/dashboard");
+      navigate(redirectPath, { replace: true });
     } catch (cause: unknown) {
       const message = cause instanceof Error ? cause.message : "Google sign-in could not be completed.";
       setError(message);
