@@ -1,0 +1,140 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Formal Medical Clinic Light Theme Tokens */
+    --background: 210 40% 98%; /* #f8fafc */
+    --foreground: 222.2 47.4% 11.2%; /* #0f172a */
+
+    --card: 0 0% 100%; /* Pure Clinical White #ffffff */
+    --card-foreground: 222.2 47.4% 11.2%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 47.4% 11.2%;
+
+    --primary: 201 96% 36%; /* Medical Sapphire Blue #0284c7 */
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 175 77% 26%; /* Clinical Deep Teal #0f766e */
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 210 40% 96.1%; /* Soft Slate Background #f1f5f9 */
+    --muted-foreground: 215.4 16.3% 46.9%; /* Slate Gray Text #64748b */
+
+    --accent: 199 89% 46%; /* Cyan Diagnostic Accent #0ea5e9 */
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 214.3 31.8% 90%; /* Crisp Clinical Border #e2e8f0 */
+    --input: 214.3 31.8% 90%;
+    --ring: 201 96% 36%;
+
+    --radius: 0.875rem; /* 14px refined medical card curvature */
+
+    --shadow-soft: 0 1px 3px 0 rgba(15, 23, 42, 0.05), 0 1px 2px -1px rgba(15, 23, 42, 0.04);
+    --shadow-soft-lg: 0 4px 6px -1px rgba(15, 23, 42, 0.07), 0 2px 4px -2px rgba(15, 23, 42, 0.05);
+  }
+
+  .dark {
+    --background: 224 71% 4%;
+    --foreground: 210 40% 98%;
+
+    --card: 224 71% 7%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 224 71% 7%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 201 96% 45%;
+    --primary-foreground: 224 71% 4%;
+
+    --secondary: 175 77% 36%;
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 217.2 32.6% 14%;
+    --muted-foreground: 215 20.2% 65.1%;
+
+    --accent: 199 89% 48%;
+    --accent-foreground: 210 40% 98%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 217.2 32.6% 15%;
+    --input: 217.2 32.6% 15%;
+    --ring: 201 96% 45%;
+
+    --shadow-soft: 0 4px 20px rgba(0, 0, 0, 0.3);
+    --shadow-soft-lg: 0 10px 30px rgba(0, 0, 0, 0.4);
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased selection:bg-primary/15 selection:text-primary tracking-tight;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply tracking-tight font-sans text-foreground;
+  }
+}
+
+@layer components {
+  /* Medical Grade Clinical Card */
+  .card-soft {
+    @apply bg-card rounded-2xl shadow-soft border border-slate-200/90 dark:border-white/10 p-6 transition-all duration-200;
+  }
+
+  .glass-morphism {
+    @apply bg-white/90 dark:bg-card/80 backdrop-blur-md border border-slate-200/90 dark:border-white/10 shadow-soft;
+  }
+
+  .premium-gradient {
+    @apply bg-gradient-to-r from-primary via-cyan-600 to-secondary;
+  }
+
+  .card-gradient-teal {
+    @apply rounded-2xl p-6 bg-gradient-to-br from-primary to-[hsl(201,96%,28%)] text-primary-foreground border-0 shadow-md shadow-primary/15;
+  }
+
+  .card-gradient-purple {
+    @apply rounded-2xl p-6 bg-gradient-to-br from-secondary to-[hsl(175,77%,18%)] text-secondary-foreground border-0 shadow-md shadow-secondary/15;
+  }
+
+  /* Clinical Status Badges */
+  .badge-clinical-normal {
+    @apply inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800/40;
+  }
+
+  .badge-clinical-attention {
+    @apply inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-800/40;
+  }
+
+  .badge-clinical-critical {
+    @apply inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-950/40 dark:text-rose-400 dark:border-rose-800/40;
+  }
+}
+
+@keyframes spin-slow {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin-slow {
+  animation: spin-slow 12s linear infinite;
+}
