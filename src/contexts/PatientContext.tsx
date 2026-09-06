@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { patientService } from "@/services/patient.service";
 import type { Patient, PatientInput } from "@/types/patient";
+export type { Patient, PatientInput } from "@/types/patient";
 
 type Value = {
   patients: Patient[];

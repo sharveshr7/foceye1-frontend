@@ -15,7 +15,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import type { AIDiagnosisAndPlan } from "@/services/ai.service";
-import type { Patient } from "@/contexts/PatientContext";
+import type { Patient } from "@/types/patient";
 
 export interface ClinicalSummaryReportModalProps {
   isOpen: boolean;
