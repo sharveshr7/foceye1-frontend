@@ -38,15 +38,15 @@ export const patientService = {
   },
 
   async list(): Promise<Patient[]> {
-    const localPatients = this.getLocalPatients();
-    const localMap = new Map(localPatients.map((p) => [p.id, p]));
+    const localPatients: Patient[] = this.getLocalPatients();
+    const localMap: Map<string, Patient> = new Map(localPatients.map((p: Patient) => [p.id, p]));
 
     try {
       const remotePatients = await ApiClient.get<any[]>("/patients");
       if (Array.isArray(remotePatients)) {
         // Map backend patient format to frontend Patient model
         const mapped: Patient[] = remotePatients.map((rp) => {
-          const local = localMap.get(rp.id);
+          const local: Patient | undefined = localMap.get(rp.id);
           const clinicalStatus = rp.clinical_status || local?.clinicalStatus || "EYE_TEST_PENDING";
           return {
             id: rp.id,
@@ -89,8 +89,8 @@ export const patientService = {
   },
 
   async get(id: string): Promise<Patient> {
-    const patients = this.getLocalPatients();
-    const local = patients.find((p) => p.id === id);
+    const patients: Patient[] = this.getLocalPatients();
+    const local: Patient | undefined = patients.find((p: Patient) => p.id === id);
 
     try {
       const rp = await ApiClient.get<any>(`/patients/${id}`);

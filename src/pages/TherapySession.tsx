@@ -54,9 +54,9 @@ const colorMap = {
 
 const categories: TherapyCategory[] = [
   "Eye Movement Disorders",
-  "Binocular & Accommodation",
-  "Visual Fatigue & Lifestyle",
-  "Specialized Therapies",
+  "Binocular Vision Therapy",
+  "Digital Eye Strain",
+  "Vision Performance",
 ];
 
 const therapyPlanByCondition: Record<string, string> = {

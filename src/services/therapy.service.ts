@@ -112,6 +112,10 @@ export const therapyService = {
     }
   },
 
+  getSessions: async (patientId?: string): Promise<TherapySessionData[]> => {
+    return therapyService.getHistory(patientId);
+  },
+
   getRecommendations: async () => {
     return {
       recommended_category: "Eye Movement Disorders",

@@ -35,6 +35,7 @@ export interface AIDiagnosisAndPlan {
   livenessConfidenceScore: number;
   biometricIntegrity: string;
   clinicalFindings: string;
+  clinicalSummary?: string;
   telemetryMetricEvaluation?: TelemetryEvaluationMap;
   protocolName?: string;
   prescribedPlan: PrescribedExercise[];
@@ -614,6 +615,7 @@ export const aiService = {
       // Graceful offline fallback
     }
 
+    planResult.clinicalSummary = planResult.clinicalFindings;
     return planResult;
   },
 

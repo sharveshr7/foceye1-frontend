@@ -342,9 +342,9 @@ export default function VisionTest() {
       if (selectedPatient) {
         await updatePatient(selectedPatient.id, {
           clinicalStatus: "EYE_TEST_COMPLETED",
-          observedPattern: diagnosisData.suspectedVisualProblem || diagnosisData.clinicalSummary || "Eye-tracking baseline recorded",
+          observedPattern: diagnosisData.suspectedVisualProblem || diagnosisData.clinicalFindings || "Eye-tracking baseline recorded",
           eyeCondition: diagnosisData.suspectedVisualProblem || selectedPatient.eyeCondition,
-          diagnosis: diagnosisData.clinicalSummary || selectedPatient.diagnosis,
+          diagnosis: diagnosisData.clinicalFindings || selectedPatient.diagnosis,
           recommendedTherapyId: diagnosisData.primaryExerciseId,
         });
       }
@@ -380,9 +380,9 @@ export default function VisionTest() {
       if (selectedPatient) {
         await updatePatient(selectedPatient.id, {
           clinicalStatus: "EYE_TEST_COMPLETED",
-          observedPattern: fallbackDiag.suspectedVisualProblem || fallbackDiag.clinicalSummary || "Eye-tracking baseline recorded",
+          observedPattern: fallbackDiag.suspectedVisualProblem || fallbackDiag.clinicalFindings || "Eye-tracking baseline recorded",
           eyeCondition: fallbackDiag.suspectedVisualProblem || selectedPatient.eyeCondition,
-          diagnosis: fallbackDiag.clinicalSummary || selectedPatient.diagnosis,
+          diagnosis: fallbackDiag.clinicalFindings || selectedPatient.diagnosis,
           recommendedTherapyId: fallbackDiag.primaryExerciseId,
         });
       }

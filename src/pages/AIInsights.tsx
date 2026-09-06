@@ -103,9 +103,9 @@ export default function AIInsights() {
         if (selectedPatient && activeDiag) {
           await updatePatient(selectedPatient.id, {
             clinicalStatus: "THERAPY_RECOMMENDED",
-            observedPattern: activeDiag.suspectedVisualProblem || activeDiag.clinicalSummary,
+            observedPattern: activeDiag.suspectedVisualProblem || activeDiag.clinicalFindings,
             eyeCondition: activeDiag.suspectedVisualProblem || selectedPatient.eyeCondition,
-            diagnosis: activeDiag.clinicalSummary || selectedPatient.diagnosis,
+            diagnosis: activeDiag.clinicalFindings || selectedPatient.diagnosis,
             recommendedTherapyId: activeDiag.primaryExerciseId,
           });
         }

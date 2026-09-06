@@ -52,7 +52,7 @@ export default function Profile() {
   useEffect(() => {
     if (!selectedPatient) return;
     visionService.getLatest(selectedPatient.id).then(setLatestTest);
-    therapyService.getSessions(selectedPatient.id).then(setSessions);
+    therapyService.getHistory(selectedPatient.id).then(setSessions);
   }, [selectedPatient]);
 
   if (!selectedPatient) {
