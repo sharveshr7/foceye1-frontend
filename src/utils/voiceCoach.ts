@@ -33,13 +33,21 @@ export type VoicePromptKey =
   | "follow_target"
   | "keep_head_still"
   | "good_continue"
+  | "good_short"
   | "try_again"
   | "session_start"
   | "session_paused"
   | "session_resumed"
   | "session_complete"
   | "target_aligned"
-  | "blinking_detected";
+  | "blinking_detected"
+  | "look_further_right"
+  | "look_further_left"
+  | "look_higher"
+  | "look_lower"
+  | "look_straight_screen"
+  | "position_face"
+  | "move_brighter";
 
 export const VOICE_TRANSLATIONS: Record<SupportedLanguage, Record<VoicePromptKey, string>> = {
   en: {
@@ -52,6 +60,7 @@ export const VOICE_TRANSLATIONS: Record<SupportedLanguage, Record<VoicePromptKey
     follow_target: "Follow the moving target.",
     keep_head_still: "Keep your head still. Move only your eyes.",
     good_continue: "Good, continue.",
+    good_short: "Good.",
     try_again: "Please try again.",
     session_start: "Therapy session starting. Follow the moving target.",
     session_paused: "Session paused.",
@@ -59,6 +68,13 @@ export const VOICE_TRANSLATIONS: Record<SupportedLanguage, Record<VoicePromptKey
     session_complete: "Session complete. Excellent work!",
     target_aligned: "Target aligned. Good, continue.",
     blinking_detected: "Blinking detected.",
+    look_further_right: "Try looking a little further to the right.",
+    look_further_left: "Try looking a little further to the left.",
+    look_higher: "Try looking a little higher.",
+    look_lower: "Try looking a little lower.",
+    look_straight_screen: "Look straight at the screen. Keep your head still.",
+    position_face: "Please position your face inside the frame.",
+    move_brighter: "Please move to a brighter area.",
   },
   ta: {
     look_right: "வலது பக்கம் பாருங்கள்.",
@@ -70,6 +86,7 @@ export const VOICE_TRANSLATIONS: Record<SupportedLanguage, Record<VoicePromptKey
     follow_target: "நகரும் இலக்கைப் பின்பற்றுங்கள்.",
     keep_head_still: "தலையை அசைக்காதீர்கள். கண்களை மட்டும் நகர்த்துங்கள்.",
     good_continue: "நன்று, தொடருங்கள்.",
+    good_short: "நன்று.",
     try_again: "மீண்டும் முயற்சிக்கவும்.",
     session_start: "சிகிச்சை தொடங்குகிறது. நகரும் இலக்கைப் பின்பற்றுங்கள்.",
     session_paused: "சிகிச்சை இடைநிறுத்தப்பட்டது.",
@@ -77,6 +94,13 @@ export const VOICE_TRANSLATIONS: Record<SupportedLanguage, Record<VoicePromptKey
     session_complete: "சிகிச்சை முடிந்தது. மிகச் சிறந்த முயற்சி!",
     target_aligned: "இலக்கு சரியானது. நன்று, தொடருங்கள்.",
     blinking_detected: "இமைப்பது கண்டறியப்பட்டது.",
+    look_further_right: "இன்னும் கொஞ்சம் வலது பக்கம் பார்க்க முயற்சிக்கவும்.",
+    look_further_left: "இன்னும் கொஞ்சம் இடது பக்கம் பார்க்க முயற்சிக்கவும்.",
+    look_higher: "இன்னும் கொஞ்சம் மேலே பார்க்கவும்.",
+    look_lower: "இன்னும் கொஞ்சம் கீழே பார்க்கவும்.",
+    look_straight_screen: "திரையை நேராகப் பாருங்கள். தலையை அசைக்காதீர்கள்.",
+    position_face: "உங்கள் முகத்தை சட்டத்திற்குள் வைக்கவும்.",
+    move_brighter: "வெளிச்சமான இடத்திற்கு மாறவும்.",
   },
   ml: {
     look_right: "വലത്തോട്ട് നോക്കുക.",
@@ -88,6 +112,7 @@ export const VOICE_TRANSLATIONS: Record<SupportedLanguage, Record<VoicePromptKey
     follow_target: "ചലിക്കുന്ന ലക്ഷ്യത്തെ പിന്തുടരുക.",
     keep_head_still: "തല അനക്കരുത്. കണ്ണുകൾ മാത്രം ചലിപ്പിക്കുക.",
     good_continue: "വളരെ നല്ലത്, തുടരുക.",
+    good_short: "നല്ലത്.",
     try_again: "ദയവായി വീണ്ടും ശ്രമിക്കുക.",
     session_start: "തെറാപ്പി സെഷൻ ആരംഭിക്കുന്നു. ചലിക്കുന്ന ലക്ഷ്യത്തെ പിന്തുടരുക.",
     session_paused: "സെഷൻ താൽക്കാലികമായി നിർത്തി.",
@@ -95,6 +120,13 @@ export const VOICE_TRANSLATIONS: Record<SupportedLanguage, Record<VoicePromptKey
     session_complete: "സെഷൻ പൂർത്തിയായി. മികച്ച പ്രവർത്തനം!",
     target_aligned: "ലക്ഷ്യം ശരിയായി. വളരെ നല്ലത്, തുടരുക.",
     blinking_detected: "കണ്ണ് ചിമ്മുന്നത് കണ്ടെത്തി.",
+    look_further_right: "കുറച്ചുകൂടി വലത്തോട്ട് നോക്കാൻ ശ്രമിക്കുക.",
+    look_further_left: "കുറച്ചുകൂടി ഇടത്തോട്ട് നോക്കാൻ ശ്രമിക്കുക.",
+    look_higher: "കുറച്ചുകൂടി മുകളിലേക്ക് നോക്കുക.",
+    look_lower: "കുറച്ചുകൂടി താഴേക്ക് നോക്കുക.",
+    look_straight_screen: "സ്ക്രീനിലേക്ക് നേരെ നോക്കുക. തല അനക്കരുത്.",
+    position_face: "നിങ്ങളുടെ മുഖം ഫ്രെയിമിനുള്ളിൽ വയ്ക്കുക.",
+    move_brighter: "കൂടുതൽ വെളിച്ചമുള്ള സ്ഥലത്തേക്ക് മാറുക.",
   },
   te: {
     look_right: "కుడివైపు చూడండి.",
@@ -106,6 +138,7 @@ export const VOICE_TRANSLATIONS: Record<SupportedLanguage, Record<VoicePromptKey
     follow_target: "కదులుతున్న లక్ష్యాన్ని అనుసరించండి.",
     keep_head_still: "తల తిప్పకండి. కళ్ళను మాత్రమే కదపండి.",
     good_continue: "బాగుంది, కొనసాగించండి.",
+    good_short: "బాగుంది.",
     try_again: "దయచేసి మళ్లీ ప్రయత్నించండి.",
     session_start: "థెరపీ సెషన్ ప్రారంభమవుతోంది. కదులుతున్న లక్ష్యాన్ని అనుసరించండి.",
     session_paused: "సెషన్ పాజ్ చేయబడింది.",
@@ -113,6 +146,13 @@ export const VOICE_TRANSLATIONS: Record<SupportedLanguage, Record<VoicePromptKey
     session_complete: "సెషన్ పూర్తయింది. అద్భుతమైన పని!",
     target_aligned: "లక్ష్యం కుదిరింది. బాగుంది, కొనసాగించండి.",
     blinking_detected: "రెప్పపాటు గుర్తించబడింది.",
+    look_further_right: "ఇంకొంచెం కుడివైపు చూడటానికి ప్రయత్నించండి.",
+    look_further_left: "ఇంకొంచెం ఎడమవైపు చూడటానికి ప్రయత్నించండి.",
+    look_higher: "ఇంకొంచెం పైకి చూడండి.",
+    look_lower: "ఇంకొంచెం కిందికి చూడండి.",
+    look_straight_screen: "స్క్రీన్ వైపు నేరుగా చూడండి. తల తిప్పకండి.",
+    position_face: "దయచేసి మీ ముఖాన్ని ఫ్రేమ్‌లో ఉంచండి.",
+    move_brighter: "దయచేసి మరింత వెలుతురు ఉన్న ప్రదేశానికి వెళ్ళండి.",
   },
   hi: {
     look_right: "दाईं ओर देखें।",
@@ -124,6 +164,7 @@ export const VOICE_TRANSLATIONS: Record<SupportedLanguage, Record<VoicePromptKey
     follow_target: "चलते हुए लक्ष्य का पीछा करें।",
     keep_head_still: "सिर को स्थिर रखें। केवल अपनी आँखें हिलाएं।",
     good_continue: "बहुत बढ़िया, जारी रखें।",
+    good_short: "अच्छा।",
     try_again: "कृपया फिर से प्रयास करें।",
     session_start: "थेरेपी सत्र शुरू हो रहा है। चलते हुए लक्ष्य का पीछा करें।",
     session_paused: "सत्र रोक दिया गया है।",
@@ -131,6 +172,13 @@ export const VOICE_TRANSLATIONS: Record<SupportedLanguage, Record<VoicePromptKey
     session_complete: "सत्र पूरा हुआ। बहुत अच्छा प्रयास!",
     target_aligned: "लक्ष्य संरेखित है। बहुत बढ़िया, जारी रखें।",
     blinking_detected: "पलक झपकना पहचाना गया।",
+    look_further_right: "थोड़ा और दाईं ओर देखने का प्रयास करें।",
+    look_further_left: "थोड़ा और बाईं ओर देखने का प्रयास करें।",
+    look_higher: "थोड़ा और ऊपर देखें।",
+    look_lower: "थोड़ा और नीचे देखें।",
+    look_straight_screen: "स्क्रीन पर सीधे देखें। सिर को स्थिर रखें।",
+    position_face: "कृपया अपना चेहरा फ्रेम के अंदर रखें।",
+    move_brighter: "कृपया अधिक रोशनी वाले स्थान पर जाएं।",
   },
 };
 
@@ -344,6 +392,38 @@ class VoiceCoachService {
 
   public sessionComplete() {
     this.speakPrompt("session_complete", true);
+  }
+
+  public goodShort(force: boolean = false) {
+    this.speakPrompt("good_short", force);
+  }
+
+  public lookFurtherRight(force: boolean = false) {
+    this.speakPrompt("look_further_right", force);
+  }
+
+  public lookFurtherLeft(force: boolean = false) {
+    this.speakPrompt("look_further_left", force);
+  }
+
+  public lookHigher(force: boolean = false) {
+    this.speakPrompt("look_higher", force);
+  }
+
+  public lookLower(force: boolean = false) {
+    this.speakPrompt("look_lower", force);
+  }
+
+  public lookStraightScreen(force: boolean = false) {
+    this.speakPrompt("look_straight_screen", force);
+  }
+
+  public positionFace(force: boolean = false) {
+    this.speakPrompt("position_face", force);
+  }
+
+  public moveBrighter(force: boolean = false) {
+    this.speakPrompt("move_brighter", force);
   }
 
   /**

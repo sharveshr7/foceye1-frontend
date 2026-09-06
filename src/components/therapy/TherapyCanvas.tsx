@@ -1,24 +1,44 @@
-import React, { useEffect, useRef, useState, useCallback } from "react";
+import React, { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Volume2,
   VolumeX,
   Sparkles,
   Eye,
-  Maximize,
-  Minimize,
   SunMedium,
   Moon,
   Zap,
   CheckCircle2,
   AlertCircle,
   Target,
-  Crosshair,
+  RefreshCw,
 } from "lucide-react";
 import type { TherapyExercise } from "@/lib/therapies";
 import type { EyeTrackingFrame } from "@/utils/eyeTracker";
 import { soundEffects } from "@/utils/audioSynth";
-import { voiceCoach, type GazeEvaluation } from "@/utils/voiceCoach";
+import { voiceCoach, type SupportedLanguage, type VoicePromptKey } from "@/utils/voiceCoach";
+
+export type TherapyStateMachineState =
+  | "READY"
+  | "INSTRUCTION"
+  | "WAITING"
+  | "TRACKING"
+  | "CORRECT"
+  | "INCORRECT"
+  | "FEEDBACK"
+  | "NEXT_STEP"
+  | "COMPLETE";
+
+export interface ExerciseStepDef {
+  name: string;
+  targetX: number; // 0..1 normalized coordinate
+  targetY: number; // 0..1 normalized coordinate
+  voicePrompt: VoicePromptKey;
+  tolerance: number; // radius in normalized space
+  holdDurationMs: number;
+  timeoutMs: number;
+  isBlinkRequired?: boolean;
+}
 
 export interface TherapyCanvasProps {
   exercise: TherapyExercise;
@@ -32,9 +52,16 @@ export interface TherapyCanvasProps {
     blinks: number;
     confidence: number;
     hits: number;
+    correctMovements: number;
+    incorrectMovements: number;
+    repetitions: number;
     saccadicLatencyMs?: number;
+    currentInstruction: string;
+    trackingState: TherapyStateMachineState;
+    trackingQuality: "optimal" | "acceptable" | "poor";
   }) => void;
   onGazePoint?: (pt: { x: number; y: number }) => void;
+  onSessionComplete?: () => void;
 }
 
 export const TherapyCanvas: React.FC<TherapyCanvasProps> = ({
@@ -46,260 +73,384 @@ export const TherapyCanvas: React.FC<TherapyCanvasProps> = ({
   pediatricTheme = "space",
   onMetricUpdate,
   onGazePoint,
+  onSessionComplete,
 }) => {
   const [speed, setSpeed] = useState<number>(1);
   const [isMuted, setIsMuted] = useState(false);
   const [highContrast, setHighContrast] = useState(false);
-  const [hits, setHits] = useState(0);
-  const [streak, setStreak] = useState(0);
-  const [flashPosition, setFlashPosition] = useState<{ x: number; y: number } | null>(null);
-  const [convergenceDepth, setConvergenceDepth] = useState(1);
-  const [hitFeedback, setHitFeedback] = useState<{ id: number; x: number; y: number }[]>([]);
-
-  // Live Eye Tracking & Biofeedback States
-  const [isGazeLocked, setIsGazeLocked] = useState(false);
-  const [gazeDistancePx, setGazeDistancePx] = useState(0);
-  const [gazeLockScore, setGazeLockScore] = useState(85);
-  const [fixationHoldProgress, setFixationHoldProgress] = useState(0);
-  const [detectedBlinksCount, setDetectedBlinksCount] = useState(0);
-
-  // Synchronized Voice Coach Biofeedback States
-  const [coachFeedback, setCoachFeedback] = useState<GazeEvaluation | null>(null);
   const [isVoiceMuted, setIsVoiceMuted] = useState<boolean>(() => voiceCoach.getMuted());
 
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const targetPosRef = useRef<{ x: number; y: number }>({ x: 0.5, y: 0.5 });
-  const lastBlinkStateRef = useRef<boolean>(false);
-  const lastChimeTimeRef = useRef<number>(0);
-  const lastUiUpdateTimeRef = useRef<number>(0);
-  const lastMetricUpdateTimeRef = useRef<number>(0);
-  const lastGazePointTimeRef = useRef<number>(0);
-  const gazeLockScoreRef = useRef<number>(85);
-  const fixationHoldProgressRef = useRef<number>(0);
-  const isGazeLockedRef = useRef<boolean>(false);
-
-  // Initial Voice Cue on session launch
-  useEffect(() => {
-    if (isPlaying && exercise) {
-      if (exercise.id === "blink-master") {
-        voiceCoach.blinkEyes();
-      } else if (exercise.id === "focus-hold") {
-        voiceCoach.lookCenter();
-      } else {
-        voiceCoach.sessionStart();
-      }
-    }
-  }, [isPlaying, exercise.id]);
-
-  // Saccadic Latency & Reaction Measurement States (in milliseconds)
+  // State Machine State
+  const [therapyState, setTherapyState] = useState<TherapyStateMachineState>("READY");
+  const [currentStepIndex, setCurrentStepIndex] = useState(0);
+  const [instructionText, setInstructionText] = useState("");
+  const [correctMovements, setCorrectMovements] = useState(0);
+  const [incorrectMovements, setIncorrectMovements] = useState(0);
+  const [repetitions, setRepetitions] = useState(0);
+  const [detectedBlinksCount, setDetectedBlinksCount] = useState(0);
   const [lastLatencyMs, setLastLatencyMs] = useState<number | null>(null);
   const [latencyHistory, setLatencyHistory] = useState<number[]>([]);
-  const targetSpawnTimeRef = useRef<number>(performance.now());
 
-  // Toggle audio chime mute
+  // Visual Target & Gaze Tracking Lock
+  const [targetPos, setTargetPos] = useState<{ x: number; y: number }>({ x: 0.5, y: 0.5 });
+  const [isGazeLocked, setIsGazeLocked] = useState(false);
+  const [hitFeedback, setHitFeedback] = useState<{ id: number; x: number; y: number; text: string }[]>([]);
+
+  // References for timing & high-performance tracking loop
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const stateRef = useRef<TherapyStateMachineState>("READY");
+  stateRef.current = therapyState;
+
+  const currentStepIdxRef = useRef<number>(0);
+  currentStepIdxRef.current = currentStepIndex;
+
+  const stepStartTimeRef = useRef<number>(performance.now());
+  const onTargetHoldStartRef = useRef<number | null>(null);
+  const lastStateChangeTimeRef = useRef<number>(performance.now());
+  const lastBlinkStateRef = useRef<boolean>(false);
+  const lastGazePointTimeRef = useRef<number>(0);
+  const lastMetricUpdateTimeRef = useRef<number>(0);
+
+  // Define structured, deterministic exercise steps based on exercise category & id
+  const exerciseSteps: ExerciseStepDef[] = useMemo(() => {
+    switch (exercise.id) {
+      case "target-tracking": // Horizontal smooth tracking
+        return [
+          { name: "Center", targetX: 0.5, targetY: 0.5, voicePrompt: "look_straight", tolerance: 0.16, holdDurationMs: 600, timeoutMs: 3200 },
+          { name: "Right", targetX: 0.82, targetY: 0.5, voicePrompt: "look_right", tolerance: 0.18, holdDurationMs: 700, timeoutMs: 3600 },
+          { name: "Center", targetX: 0.5, targetY: 0.5, voicePrompt: "look_straight", tolerance: 0.16, holdDurationMs: 600, timeoutMs: 3200 },
+          { name: "Left", targetX: 0.18, targetY: 0.5, voicePrompt: "look_left", tolerance: 0.18, holdDurationMs: 700, timeoutMs: 3600 },
+        ];
+
+      case "reaction-speed":
+      case "saccade-jumps":
+      case "peripheral-vision": // Cardinal Saccades & Vertical Excursion
+        return [
+          { name: "Center", targetX: 0.5, targetY: 0.5, voicePrompt: "look_straight", tolerance: 0.16, holdDurationMs: 400, timeoutMs: 2800 },
+          { name: "Up", targetX: 0.5, targetY: 0.22, voicePrompt: "look_up", tolerance: 0.18, holdDurationMs: 500, timeoutMs: 3200 },
+          { name: "Center", targetX: 0.5, targetY: 0.5, voicePrompt: "look_straight", tolerance: 0.16, holdDurationMs: 400, timeoutMs: 2800 },
+          { name: "Down", targetX: 0.5, targetY: 0.78, voicePrompt: "look_down", tolerance: 0.18, holdDurationMs: 500, timeoutMs: 3200 },
+          { name: "Right", targetX: 0.80, targetY: 0.5, voicePrompt: "look_right", tolerance: 0.18, holdDurationMs: 500, timeoutMs: 3200 },
+          { name: "Left", targetX: 0.20, targetY: 0.5, voicePrompt: "look_left", tolerance: 0.18, holdDurationMs: 500, timeoutMs: 3200 },
+        ];
+
+      case "focus-hold":
+      case "fusion-circles": // Fixation Stability & Foveal Hold
+        return [
+          { name: "Fixation Hold", targetX: 0.5, targetY: 0.5, voicePrompt: "look_straight_screen", tolerance: 0.14, holdDurationMs: 2200, timeoutMs: 4500 },
+        ];
+
+      case "blink-master":
+      case "visual-rest": // Deliberate Blinking & Tearfilm Refresh
+        return [
+          { name: "Straight Gaze", targetX: 0.5, targetY: 0.5, voicePrompt: "look_straight", tolerance: 0.16, holdDurationMs: 800, timeoutMs: 3000 },
+          { name: "Blink Complete", targetX: 0.5, targetY: 0.5, voicePrompt: "blink_eyes", tolerance: 0.35, holdDurationMs: 200, timeoutMs: 4000, isBlinkRequired: true },
+        ];
+
+      case "convergence-pushup": // Vergence & Near Point
+        return [
+          { name: "Distant Target", targetX: 0.5, targetY: 0.5, voicePrompt: "look_straight", tolerance: 0.18, holdDurationMs: 800, timeoutMs: 3500 },
+          { name: "Near Target", targetX: 0.5, targetY: 0.5, voicePrompt: "follow_target", tolerance: 0.20, holdDurationMs: 1400, timeoutMs: 4000 },
+        ];
+
+      case "circular-tracking":
+      case "figure-eight":
+      case "spiral-inward": // Smooth Pursuit Vectors
+      default:
+        return [
+          { name: "Upper Right", targetX: 0.75, targetY: 0.32, voicePrompt: "follow_target", tolerance: 0.20, holdDurationMs: 600, timeoutMs: 3500 },
+          { name: "Lower Right", targetX: 0.75, targetY: 0.68, voicePrompt: "follow_target", tolerance: 0.20, holdDurationMs: 600, timeoutMs: 3500 },
+          { name: "Lower Left", targetX: 0.25, targetY: 0.68, voicePrompt: "follow_target", tolerance: 0.20, holdDurationMs: 600, timeoutMs: 3500 },
+          { name: "Upper Left", targetX: 0.25, targetY: 0.32, voicePrompt: "follow_target", tolerance: 0.20, holdDurationMs: 600, timeoutMs: 3500 },
+          { name: "Center", targetX: 0.5, targetY: 0.5, voicePrompt: "look_straight", tolerance: 0.16, holdDurationMs: 600, timeoutMs: 3000 },
+        ];
+    }
+  }, [exercise.id]);
+
+  // Sync current step target coordinates to state
+  useEffect(() => {
+    const step = exerciseSteps[currentStepIndex] || exerciseSteps[0];
+    if (step) {
+      setTargetPos({ x: step.targetX, y: step.targetY });
+    }
+  }, [currentStepIndex, exerciseSteps]);
+
+  // Audio effect toggle
   const toggleMute = () => {
     const next = !isMuted;
     setIsMuted(next);
     soundEffects.setMuted(next);
   };
 
-  // Trigger manual or automatic gaze hit with reaction latency calculation
-  const handleTargetHit = useCallback((screenX?: number, screenY?: number) => {
-    if (!isPlaying) return;
-    const now = performance.now();
-    const elapsedMs = Math.round(now - targetSpawnTimeRef.current);
-    
-    // Only register plausible reaction times (>= 80ms)
-    if (elapsedMs >= 80) {
-      setLastLatencyMs(elapsedMs);
-      setLatencyHistory((prev) => [...prev.slice(-19), elapsedMs]);
-    }
+  // Trigger floating visual feedback
+  const triggerHitFeedback = (screenX: number, screenY: number, text: string) => {
+    const newHit = { id: Date.now(), x: screenX, y: screenY, text };
+    setHitFeedback((prev) => [...prev.slice(-3), newHit]);
+    setTimeout(() => {
+      setHitFeedback((prev) => prev.filter((h) => h.id !== newHit.id));
+    }, 700);
+  };
 
-    setHits((prev) => prev + 1);
-    setStreak((prev) => prev + 1);
-    soundEffects.playTargetCatch();
-
-    if (screenX && screenY && containerRef.current) {
-      const newHit = { id: Date.now(), x: screenX, y: screenY };
-      setHitFeedback((prev) => [...prev.slice(-4), newHit]);
-      setTimeout(() => {
-        setHitFeedback((prev) => prev.filter((h) => h.id !== newHit.id));
-      }, 600);
-    }
-  }, [isPlaying]);
-
-  // Keyboard spacebar listener for reaction exercises
+  // =========================================================================
+  // THERAPY STATE MACHINE EXECUTION ENGINE
+  // Transitions: READY -> INSTRUCTION -> WAITING -> TRACKING -> CORRECT / INCORRECT -> FEEDBACK -> NEXT_STEP -> COMPLETE
+  // =========================================================================
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.code === "Space" && isPlaying) {
-        e.preventDefault();
-        handleTargetHit();
+    if (!isPlaying) {
+      if (therapyState !== "READY" && therapyState !== "COMPLETE") {
+        setTherapyState("READY");
       }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isPlaying, handleTargetHit]);
-
-  // 1. Saccades & Peripheral flash generator with millisecond timing
-  useEffect(() => {
-    if (!isPlaying) return;
-
-    if (
-      exercise.id === "reaction-speed" ||
-      exercise.id === "peripheral-vision" ||
-      exercise.id === "saccade-jumps"
-    ) {
-      const spawnTarget = () => {
-        const x = Math.floor(15 + Math.random() * 70);
-        const y = Math.floor(18 + Math.random() * 64);
-        setFlashPosition({ x, y });
-        targetPosRef.current = { x: x / 100, y: y / 100 };
-        targetSpawnTimeRef.current = performance.now();
-      };
-
-      spawnTarget();
-      const interval = setInterval(spawnTarget, Math.max(1600, 3200 / speed));
-      return () => clearInterval(interval);
+      return;
     }
-  }, [isPlaying, speed, exercise.id]);
 
-  // 2. Continuous Real-Time Eye & Gaze Tracking Integration Loop
+    const currentStep = exerciseSteps[currentStepIndex] || exerciseSteps[0];
+    if (!currentStep) return;
+
+    let timeoutId: NodeJS.Timeout | null = null;
+
+    if (therapyState === "READY") {
+      setTherapyState("INSTRUCTION");
+    } else if (therapyState === "INSTRUCTION") {
+      const promptText = voiceCoach.getPromptText(currentStep.voicePrompt);
+      setInstructionText(promptText);
+      voiceCoach.speakPrompt(currentStep.voicePrompt, true);
+      stepStartTimeRef.current = performance.now();
+      onTargetHoldStartRef.current = null;
+      lastStateChangeTimeRef.current = performance.now();
+
+      // Brief buffer for voice initiation and cognitive response
+      timeoutId = setTimeout(() => {
+        setTherapyState("WAITING");
+      }, 450);
+    } else if (therapyState === "WAITING") {
+      timeoutId = setTimeout(() => {
+        setTherapyState("TRACKING");
+        lastStateChangeTimeRef.current = performance.now();
+      }, 250);
+    } else if (therapyState === "CORRECT") {
+      soundEffects.playTargetCatch();
+      const praiseText = voiceCoach.getPromptText("good_short");
+      setInstructionText(praiseText);
+      voiceCoach.speakPrompt("good_short", true);
+
+      // Trigger floating feedback in container center or target position
+      if (containerRef.current) {
+        const rect = containerRef.current.getBoundingClientRect();
+        triggerHitFeedback(rect.width * currentStep.targetX, rect.height * currentStep.targetY, `✓ ${praiseText}`);
+      }
+
+      timeoutId = setTimeout(() => {
+        setTherapyState("FEEDBACK");
+      }, 650);
+    } else if (therapyState === "INCORRECT") {
+      // Determine directionally accurate corrective voice instruction
+      let correctivePrompt: VoicePromptKey = "try_again";
+      if (currentStep.isBlinkRequired) {
+        correctivePrompt = "blink_eyes";
+      } else if (currentStep.targetX > 0.65) {
+        correctivePrompt = "look_further_right";
+      } else if (currentStep.targetX < 0.35) {
+        correctivePrompt = "look_further_left";
+      } else if (currentStep.targetY < 0.35) {
+        correctivePrompt = "look_higher";
+      } else if (currentStep.targetY > 0.65) {
+        correctivePrompt = "look_lower";
+      }
+
+      const correctiveText = voiceCoach.getPromptText(correctivePrompt);
+      setInstructionText(correctiveText);
+      voiceCoach.speakPrompt(correctivePrompt, true);
+
+      timeoutId = setTimeout(() => {
+        setTherapyState("FEEDBACK");
+      }, 950);
+    } else if (therapyState === "FEEDBACK") {
+      timeoutId = setTimeout(() => {
+        setTherapyState("NEXT_STEP");
+      }, 350);
+    } else if (therapyState === "NEXT_STEP") {
+      onTargetHoldStartRef.current = null;
+      const nextIdx = currentStepIndex + 1;
+      if (nextIdx >= exerciseSteps.length) {
+        setCurrentStepIndex(0);
+        setRepetitions((r) => r + 1);
+      } else {
+        setCurrentStepIndex(nextIdx);
+      }
+
+      if (timeLeft <= 0) {
+        setTherapyState("COMPLETE");
+      } else {
+        setTherapyState("INSTRUCTION");
+      }
+    } else if (therapyState === "COMPLETE") {
+      const compText = voiceCoach.getPromptText("session_complete");
+      setInstructionText(compText);
+      voiceCoach.speakPrompt("session_complete", true);
+      onSessionComplete?.();
+    }
+
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+  }, [
+    isPlaying,
+    therapyState,
+    currentStepIndex,
+    exerciseSteps,
+    timeLeft,
+    onSessionComplete,
+  ]);
+
+  // =========================================================================
+  // CONTINUOUS GAZE FRAME EVALUATION LOOP (Active during TRACKING state)
+  // =========================================================================
   useEffect(() => {
-    if (!isPlaying || !gazeFrame || !containerRef.current) return;
+    if (!isPlaying || therapyState !== "TRACKING") return;
     const nowTime = performance.now();
 
-    // Accumulate gaze points for 2D heatmap (throttled to ~10Hz to prevent array churn)
-    if (onGazePoint && nowTime - lastGazePointTimeRef.current >= 100) {
+    // 1. Accumulate 2D Gaze Points for Heatmap
+    if (gazeFrame && onGazePoint && nowTime - lastGazePointTimeRef.current >= 100) {
       lastGazePointTimeRef.current = nowTime;
       onGazePoint({ x: gazeFrame.gazeX, y: gazeFrame.gazeY });
     }
 
-    const rect = containerRef.current.getBoundingClientRect();
-    const gazePixelX = gazeFrame.gazeX * rect.width;
-    const gazePixelY = gazeFrame.gazeY * rect.height;
-
-    // Calculate current target screen coordinates
-    let targetPixelX = rect.width * 0.5;
-    let targetPixelY = rect.height * 0.5;
-
-    if (exercise.id === "target-tracking" || exercise.id === "circular-tracking" || exercise.id === "figure-eight") {
-      const now = nowTime / 1000;
-      const angle = (now * (0.8 * speed)) % (Math.PI * 2);
-      const orbitRadiusX = Math.min(160, rect.width * 0.28);
-      const orbitRadiusY = Math.min(80, rect.height * 0.20);
-      targetPixelX = rect.width * 0.5 + Math.sin(angle) * orbitRadiusX;
-      targetPixelY = rect.height * 0.5 + Math.cos(angle * 2) * (orbitRadiusY * 0.6);
-      targetPosRef.current = { x: targetPixelX / rect.width, y: targetPixelY / rect.height };
-    } else if (flashPosition) {
-      targetPixelX = (flashPosition.x / 100) * rect.width;
-      targetPixelY = (flashPosition.y / 100) * rect.height;
-    }
-
-    // Measure Euclidean distance between gaze cursor and target center
-    const dx = gazePixelX - targetPixelX;
-    const dy = gazePixelY - targetPixelY;
-    const distance = Math.sqrt(dx * dx + dy * dy);
-
-    // Determine lock threshold based on exercise mode
-    const lockThreshold = exercise.id === "focus-hold" ? 75 : 95;
-    const locked = distance < lockThreshold;
-    isGazeLockedRef.current = locked;
-
-    // A. Focus Hold Fixation Charging
-    if (exercise.id === "focus-hold" || exercise.id === "fusion-circles") {
-      if (locked) {
-        fixationHoldProgressRef.current = Math.min(100, fixationHoldProgressRef.current + 1.2);
-        if (nowTime - lastChimeTimeRef.current > 1800) {
-          soundEffects.playStreakChime(Math.floor(fixationHoldProgressRef.current / 20));
-          lastChimeTimeRef.current = nowTime;
-        }
-      } else {
-        fixationHoldProgressRef.current = Math.max(0, fixationHoldProgressRef.current - 0.6);
-      }
-    }
-
-    // B. Target Tracking Lock Audio & Score
-    if (exercise.id === "target-tracking" || exercise.id === "circular-tracking") {
-      if (locked) {
-        gazeLockScoreRef.current = Math.min(99, gazeLockScoreRef.current + 0.3);
-        if (nowTime - lastChimeTimeRef.current > 2200) {
-          soundEffects.playTargetCatch();
-          lastChimeTimeRef.current = nowTime;
-        }
-      } else {
-        gazeLockScoreRef.current = Math.max(60, gazeLockScoreRef.current - 0.2);
-      }
-    }
-
-    // C. Saccade Flash Auto-Hit on Gaze Arrival
-    if (flashPosition && distance < 85) {
-      handleTargetHit(targetPixelX, targetPixelY);
-      const x = Math.floor(15 + Math.random() * 70);
-      const y = Math.floor(18 + Math.random() * 64);
-      setFlashPosition({ x, y });
-      targetPosRef.current = { x: x / 100, y: y / 100 };
-      targetSpawnTimeRef.current = performance.now();
-    }
-
-    // D. Real-Time Blink Tracking for Blink Master
-    if (gazeFrame.isBlinking && !lastBlinkStateRef.current) {
+    // 2. Track Blink Dynamics
+    if (gazeFrame?.isBlinking && !lastBlinkStateRef.current) {
       lastBlinkStateRef.current = true;
       setDetectedBlinksCount((prev) => prev + 1);
       soundEffects.playSoftClick();
-    } else if (!gazeFrame.isBlinking) {
+    } else if (!gazeFrame?.isBlinking) {
       lastBlinkStateRef.current = false;
     }
 
-    // Throttle React state updates to ~10 Hz (every 100ms) to eliminate mobile rendering lag
-    if (nowTime - lastUiUpdateTimeRef.current >= 100) {
-      lastUiUpdateTimeRef.current = nowTime;
-      setGazeDistancePx(Math.round(distance));
-      setIsGazeLocked(locked);
-      setGazeLockScore(Math.round(gazeLockScoreRef.current));
-      setFixationHoldProgress(Math.round(fixationHoldProgressRef.current));
+    const currentStep = exerciseSteps[currentStepIndex] || exerciseSteps[0];
+    if (!currentStep) return;
 
-      const normTargetX = targetPixelX / rect.width;
-      const normTargetY = targetPixelY / rect.height;
-      const evalResult = voiceCoach.evaluateGazeAndCoach(
-        normTargetX,
-        normTargetY,
-        gazeFrame.gazeX,
-        gazeFrame.gazeY,
-        gazeFrame.confidence,
-        gazeFrame.isBlinking
-      );
-      setCoachFeedback(evalResult);
+    // A. Blink Exercise Target Verification
+    if (currentStep.isBlinkRequired) {
+      if (gazeFrame?.isBlinking) {
+        const elapsed = Math.round(nowTime - stepStartTimeRef.current);
+        if (elapsed >= 100) {
+          setLastLatencyMs(elapsed);
+          setLatencyHistory((h) => [...h.slice(-19), elapsed]);
+        }
+        setCorrectMovements((c) => c + 1);
+        setIsGazeLocked(true);
+        setTherapyState("CORRECT");
+        return;
+      }
+
+      // Check timeout
+      if (nowTime - stepStartTimeRef.current > currentStep.timeoutMs / speed) {
+        setIncorrectMovements((i) => i + 1);
+        setIsGazeLocked(false);
+        setTherapyState("INCORRECT");
+        return;
+      }
+      return;
     }
 
-    // Throttle parent onMetricUpdate to at most twice a second (500ms)
-    if (onMetricUpdate && nowTime - lastMetricUpdateTimeRef.current >= 500) {
-      lastMetricUpdateTimeRef.current = nowTime;
-      const avgLatency =
-        latencyHistory.length > 0
-          ? Math.round(latencyHistory.reduce((a, b) => a + b, 0) / latencyHistory.length)
-          : undefined;
+    // B. Eye Gaze Target Distance & Lock Verification
+    if (gazeFrame) {
+      const dx = gazeFrame.gazeX - currentStep.targetX;
+      const dy = gazeFrame.gazeY - currentStep.targetY;
+      const distance = Math.hypot(dx, dy);
+      const isWithinTolerance = distance <= currentStep.tolerance;
+      setIsGazeLocked(isWithinTolerance);
 
-      onMetricUpdate({
-        accuracy: Math.round(gazeLockScoreRef.current),
-        blinks: gazeFrame.blinkRatePerMin,
-        confidence: Math.round(gazeFrame.confidence * 100),
-        hits,
-        saccadicLatencyMs: avgLatency,
-      });
+      if (isWithinTolerance) {
+        if (onTargetHoldStartRef.current === null) {
+          onTargetHoldStartRef.current = nowTime;
+        } else if (nowTime - onTargetHoldStartRef.current >= currentStep.holdDurationMs / speed) {
+          // Success: Gaze held on target for the required duration!
+          const reactionTime = Math.max(120, Math.round(nowTime - stepStartTimeRef.current));
+          setLastLatencyMs(reactionTime);
+          setLatencyHistory((h) => [...h.slice(-19), reactionTime]);
+          setCorrectMovements((c) => c + 1);
+          setTherapyState("CORRECT");
+          return;
+        }
+      } else {
+        // Displaced from target
+        onTargetHoldStartRef.current = null;
+        if (nowTime - stepStartTimeRef.current > currentStep.timeoutMs / speed) {
+          // Failure: Target acquisition timed out or missed
+          setIncorrectMovements((i) => i + 1);
+          setTherapyState("INCORRECT");
+          return;
+        }
+      }
+    } else {
+      // Camera feed unavailable or no face detected during tracking
+      if (nowTime - stepStartTimeRef.current > currentStep.timeoutMs / speed) {
+        setIncorrectMovements((i) => i + 1);
+        setTherapyState("INCORRECT");
+      }
     }
   }, [
     isPlaying,
+    therapyState,
     gazeFrame,
+    currentStepIndex,
+    exerciseSteps,
     speed,
-    exercise.id,
-    flashPosition,
-    hits,
-    latencyHistory,
-    onMetricUpdate,
     onGazePoint,
-    handleTargetHit,
   ]);
 
+  // =========================================================================
+  // PERIODIC METRIC BROADCAST TO PARENT HUD (Twice per second)
+  // =========================================================================
+  useEffect(() => {
+    if (!onMetricUpdate) return;
+    const nowTime = performance.now();
+    if (nowTime - lastMetricUpdateTimeRef.current < 500) return;
+    lastMetricUpdateTimeRef.current = nowTime;
+
+    const totalDecisions = correctMovements + incorrectMovements;
+    const computedAccuracy =
+      totalDecisions > 0
+        ? Math.round((correctMovements / totalDecisions) * 100)
+        : isGazeLocked
+        ? 90
+        : 75;
+
+    const avgLatency =
+      latencyHistory.length > 0
+        ? Math.round(latencyHistory.reduce((a, b) => a + b, 0) / latencyHistory.length)
+        : undefined;
+
+    const confidenceVal = gazeFrame ? Math.round(gazeFrame.confidence * 100) : 0;
+    const quality: "optimal" | "acceptable" | "poor" =
+      confidenceVal >= 75 ? "optimal" : confidenceVal >= 40 ? "acceptable" : "poor";
+
+    onMetricUpdate({
+      accuracy: computedAccuracy,
+      blinks: gazeFrame?.blinkRatePerMin ?? detectedBlinksCount,
+      confidence: confidenceVal,
+      hits: correctMovements,
+      correctMovements,
+      incorrectMovements,
+      repetitions,
+      saccadicLatencyMs: avgLatency,
+      currentInstruction: instructionText || voiceCoach.getPromptText("follow_target"),
+      trackingState: therapyState,
+      trackingQuality: quality,
+    });
+  }, [
+    onMetricUpdate,
+    correctMovements,
+    incorrectMovements,
+    repetitions,
+    latencyHistory,
+    gazeFrame,
+    detectedBlinksCount,
+    instructionText,
+    therapyState,
+    isGazeLocked,
+  ]);
+
+  // Pediatric Emoji Mascot
   const pediatricEmojis = {
     space: "🚀",
     safari: "🦁",
@@ -314,36 +465,53 @@ export const TherapyCanvas: React.FC<TherapyCanvasProps> = ({
       className={`relative w-full h-[360px] sm:h-[460px] md:h-[540px] rounded-2xl sm:rounded-[2.5rem] border overflow-hidden flex items-center justify-center select-none transition-colors ${
         highContrast
           ? "bg-black text-white border-white/20"
-          : "bg-slate-900/90 dark:bg-card/70 text-foreground border-border/80 shadow-2xl"
+          : "bg-slate-900/95 dark:bg-card/85 text-foreground border-border/80 shadow-2xl"
       }`}
     >
-      {/* Top Controls & Live Gaze Precision HUD */}
+      {/* TOP HUD: Live Tracking State Machine & Gaze Precision Badge */}
       <div className="absolute top-3 sm:top-4 inset-x-3 sm:inset-x-6 z-40 flex items-center justify-between gap-2 pointer-events-none">
-        {/* Live Gaze Biofeedback Lock Pill */}
-        <div className="flex items-center gap-1.5 sm:gap-2 bg-black/75 backdrop-blur-md px-2.5 sm:px-3.5 py-1 sm:py-1.5 rounded-full border border-white/10 text-[11px] sm:text-xs font-semibold text-white shadow-xl pointer-events-auto max-w-[65%] sm:max-w-none truncate">
+        <div className="flex items-center gap-1.5 sm:gap-2 bg-black/80 backdrop-blur-md px-2.5 sm:px-3.5 py-1 sm:py-1.5 rounded-full border border-white/10 text-[11px] sm:text-xs font-semibold text-white shadow-xl pointer-events-auto max-w-[70%] sm:max-w-none truncate">
           <span
-            className={`w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full shrink-0 transition-colors ${
-              isGazeLocked ? "bg-emerald-400 animate-pulse shadow-[0_0_10px_rgba(52,211,153,1)]" : "bg-amber-400"
+            className={`w-2.5 h-2.5 rounded-full shrink-0 transition-colors ${
+              therapyState === "CORRECT"
+                ? "bg-emerald-400 animate-ping shadow-[0_0_12px_rgba(52,211,153,1)]"
+                : therapyState === "INCORRECT"
+                ? "bg-amber-400 animate-pulse shadow-[0_0_12px_rgba(251,191,36,1)]"
+                : isGazeLocked
+                ? "bg-emerald-400"
+                : "bg-cyan-400"
             }`}
           />
-          <span className={`truncate ${isGazeLocked ? "text-emerald-300 font-bold" : "text-white/80"}`}>
-            <span className="hidden sm:inline">{isGazeLocked ? "GAZE LOCKED ON TARGET" : "TRACKING EYE MOVEMENT"}</span>
-            <span className="sm:hidden">{isGazeLocked ? "LOCKED" : "TRACKING"}</span>
+          <span
+            className={`truncate font-bold ${
+              therapyState === "CORRECT"
+                ? "text-emerald-300"
+                : therapyState === "INCORRECT"
+                ? "text-amber-300"
+                : "text-white"
+            }`}
+          >
+            {therapyState === "CORRECT"
+              ? "CORRECT ✓"
+              : therapyState === "INCORRECT"
+              ? "TRY AGAIN"
+              : therapyState === "TRACKING"
+              ? isGazeLocked
+                ? "GAZE LOCKED"
+                : "TRACKING MOVEMENT"
+              : therapyState}
           </span>
           <span className="text-white/30">|</span>
-          <span className="text-white/90 shrink-0">Acc: {Math.round(gazeLockScore)}%</span>
-          {gazeFrame && (
-            <>
-              <span className="text-white/30 hidden sm:inline">|</span>
-              <span className="text-primary font-mono hidden sm:inline">{gazeFrame.leftEye.diameterMm}mm</span>
-            </>
-          )}
+          <span className="text-white/90 shrink-0">Reps: {repetitions}</span>
+          <span className="text-white/30 hidden sm:inline">|</span>
+          <span className="text-emerald-400 hidden sm:inline">✓ {correctMovements}</span>
+          <span className="text-amber-400 hidden sm:inline">✕ {incorrectMovements}</span>
         </div>
 
-        {/* Action icons */}
+        {/* Action controls (Speed, Chime Mute, Contrast) */}
         <div className="flex items-center gap-1.5 sm:gap-2 pointer-events-auto shrink-0">
           <button
-            onClick={() => setSpeed((prev) => (prev >= 2 ? 0.5 : prev + 0.5))}
+            onClick={() => setSpeed((prev) => (prev >= 2 ? 0.75 : prev + 0.25))}
             className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-black/60 hover:bg-black/80 text-white flex items-center justify-center text-xs font-bold border border-white/10 transition-colors shadow-lg"
             title="Adjust target speed"
           >
@@ -359,14 +527,14 @@ export const TherapyCanvas: React.FC<TherapyCanvasProps> = ({
           <button
             onClick={() => setHighContrast((prev) => !prev)}
             className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-black/60 hover:bg-black/80 text-white flex items-center justify-center border border-white/10 transition-colors shadow-lg"
-            title="Toggle high-contrast photophobia mode"
+            title="Toggle high contrast mode"
           >
             {highContrast ? <SunMedium size={15} /> : <Moon size={15} />}
           </button>
         </div>
       </div>
 
-      {/* Live On-Screen Eye Gaze Reticle Overlay */}
+      {/* REAL-TIME GAZE RETICLE OVERLAY (Driven directly by camera face/eye tracking) */}
       {gazeFrame && isPlaying && (
         <div
           className="absolute z-30 pointer-events-none transition-transform duration-75 ease-out"
@@ -377,10 +545,11 @@ export const TherapyCanvas: React.FC<TherapyCanvasProps> = ({
           }}
         >
           <div className="relative flex items-center justify-center">
-            {/* Gaze Crosshair */}
             <div
               className={`w-10 h-10 rounded-full border-2 transition-colors flex items-center justify-center ${
-                isGazeLocked ? "border-emerald-400 shadow-[0_0_20px_rgba(52,211,153,0.9)]" : "border-teal-400/80 shadow-[0_0_12px_rgba(20,184,166,0.6)]"
+                isGazeLocked
+                  ? "border-emerald-400 shadow-[0_0_20px_rgba(52,211,153,0.9)]"
+                  : "border-teal-400/80 shadow-[0_0_12px_rgba(20,184,166,0.6)]"
               }`}
             >
               <div className={`w-2 h-2 rounded-full ${isGazeLocked ? "bg-emerald-400" : "bg-teal-300 animate-ping"}`} />
@@ -392,321 +561,116 @@ export const TherapyCanvas: React.FC<TherapyCanvasProps> = ({
         </div>
       )}
 
-      {/* Hit feedback floaters */}
+      {/* Floating feedback animations */}
       {hitFeedback.map((h) => (
         <motion.div
           key={h.id}
           initial={{ opacity: 1, scale: 0.8, y: 0 }}
-          animate={{ opacity: 0, scale: 1.8, y: -40 }}
-          transition={{ duration: 0.55 }}
-          className="absolute z-40 pointer-events-none text-emerald-400 font-extrabold text-sm flex items-center gap-1 shadow-lg"
+          animate={{ opacity: 0, scale: 1.6, y: -45 }}
+          transition={{ duration: 0.65 }}
+          className="absolute z-40 pointer-events-none text-emerald-400 font-black text-sm flex items-center gap-1 shadow-lg"
           style={{ left: h.x, top: h.y }}
         >
-          <Sparkles size={16} /> +10 GAZE LOCK!
+          <Sparkles size={16} /> {h.text}
         </motion.div>
       ))}
 
-      {/* --- EXERCISE 1: SMOOTH PURSUIT & TARGET TRACKING --- */}
-      {(exercise.id === "target-tracking" ||
-        exercise.id === "circular-tracking" ||
-        exercise.id === "figure-eight" ||
-        exercise.id === "spiral-inward") && (
-        <div className="relative w-full h-full flex items-center justify-center">
-          {/* Orbital path guides */}
-          <div className="absolute w-56 h-56 md:w-72 md:h-72 rounded-full border border-dashed border-primary/20 pointer-events-none" />
-          <div className="absolute w-80 h-80 md:w-96 md:h-96 rounded-full border border-dashed border-primary/10 pointer-events-none" />
-
-          {/* Dynamic Moving Target */}
-          {isPlaying && (
-            <motion.div
-              animate={{
-                x: [-105, 105, -105],
-                y: [-42, 42, -42],
-              }}
-              transition={{
-                duration: 8 / speed,
-                repeat: Infinity,
-                ease: "easeInOut",
-              }}
-              onClick={(e) => {
-                if (containerRef.current) {
-                  const rect = containerRef.current.getBoundingClientRect();
-                  handleTargetHit(e.clientX - rect.left, e.clientY - rect.top);
-                }
-              }}
-              className="absolute z-20 cursor-pointer group"
-            >
-              <div className="relative w-16 h-16 flex items-center justify-center">
-                {/* Gaze Lock Active Glow Ring */}
-                <div
-                  className={`absolute inset-0 rounded-full transition-all duration-150 ${
-                    isGazeLocked
-                      ? "bg-emerald-400/40 blur-xl scale-125 animate-pulse"
-                      : "bg-primary/30 blur-lg"
-                  }`}
-                />
-                {pediatricMode ? (
-                  <div className="w-14 h-14 rounded-3xl bg-amber-400/20 border-2 border-amber-400 flex items-center justify-center text-3xl shadow-[0_0_30px_rgba(251,191,36,0.8)] hover:scale-125 transition-transform">
-                    {currentThemeEmoji}
-                  </div>
-                ) : (
-                  <div
-                    className={`w-14 h-14 rounded-full flex items-center justify-center border-2 border-white transition-all shadow-2xl ${
-                      isGazeLocked ? "bg-emerald-500 shadow-[0_0_35px_rgba(52,211,153,1)] scale-110" : "bg-primary shadow-[0_0_25px_rgba(20,184,166,0.8)]"
-                    }`}
-                  >
-                    <div className="w-4 h-4 rounded-full bg-white animate-ping opacity-80" />
-                    <div className="w-2.5 h-2.5 rounded-full bg-primary-foreground absolute" />
-                  </div>
-                )}
-              </div>
-            </motion.div>
-          )}
-
-          {/* Central Fixation Reference Dot */}
-          <div className="w-2.5 h-2.5 rounded-full bg-muted-foreground/30 pointer-events-none" />
-        </div>
-      )}
-
-      {/* --- EXERCISE 2: FOCUS STABILITY & CENTRAL FIXATION HOLD --- */}
-      {(exercise.id === "focus-hold" || exercise.id === "fusion-circles") && (
-        <div className="relative flex flex-col items-center justify-center space-y-6">
-          <motion.div
-            animate={{
-              scale: isPlaying ? [1, 1.15, 1] : 1,
-            }}
-            transition={{
-              duration: 5 / speed,
-              repeat: Infinity,
-              ease: "easeInOut",
-            }}
-            onClick={(e) => {
-              if (containerRef.current) {
-                const rect = containerRef.current.getBoundingClientRect();
-                handleTargetHit(e.clientX - rect.left, e.clientY - rect.top);
-              }
-            }}
-            className="relative w-44 h-44 flex items-center justify-center cursor-pointer"
-          >
-            {/* Fixation Hold Charging Progress Ring */}
-            <svg className="absolute inset-0 w-full h-full -rotate-90">
-              <circle cx="88" cy="88" r="74" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="6" />
-              <circle
-                cx="88"
-                cy="88"
-                r="74"
-                fill="none"
-                stroke={isGazeLocked ? "#10b981" : "#14b8a6"}
-                strokeWidth="6"
-                strokeDasharray="465"
-                strokeDashoffset={465 - (465 * fixationHoldProgress) / 100}
-                strokeLinecap="round"
-                className="transition-all duration-150"
-              />
-            </svg>
-
-            <div className="w-28 h-28 rounded-full border-2 border-primary/60 flex items-center justify-center bg-primary/10">
-              <div
-                className={`w-14 h-14 rounded-full flex items-center justify-center transition-all shadow-2xl ${
-                  isGazeLocked
-                    ? "bg-emerald-500 shadow-[0_0_40px_rgba(52,211,153,1)] scale-110"
-                    : "bg-primary shadow-[0_0_25px_rgba(20,184,166,0.7)]"
-                }`}
-              >
-                <div className="w-4 h-4 rounded-full bg-white animate-ping" />
-              </div>
-            </div>
-          </motion.div>
-
-          <div className="text-center space-y-1">
-            <p className="text-xs font-bold text-white uppercase tracking-widest">
-              {isGazeLocked ? "✨ Foveal Focus Locked!" : "Fixate gaze steadily on central target"}
-            </p>
-            <p className="text-[11px] text-muted-foreground">
-              Stability Charge: <span className="text-emerald-400 font-bold">{Math.round(fixationHoldProgress)}%</span>
-            </p>
-          </div>
-        </div>
-      )}
-
-      {/* --- EXERCISE 3: REACTION SPEED & SACCADE JUMPS --- */}
-      {(exercise.id === "reaction-speed" ||
-        exercise.id === "peripheral-vision" ||
-        exercise.id === "saccade-jumps") && (
-        <div className="relative w-full h-full flex items-center justify-center">
-          {/* Top Real-Time Saccadic Latency HUD */}
-          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-3 bg-black/80 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/10 shadow-2xl">
-            <div className="flex items-center gap-2">
-              <Zap size={16} className="text-amber-400 animate-pulse" />
-              <span className="text-xs font-bold text-white/90 uppercase tracking-wider">
-                Saccadic Latency:
-              </span>
-            </div>
-
-            {lastLatencyMs !== null ? (
-              <span
-                className={`px-2.5 py-0.5 rounded-full text-xs font-black tracking-wide border flex items-center gap-1.5 ${
-                  lastLatencyMs < 250
-                    ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-[0_0_15px_rgba(16,185,129,0.3)]"
-                    : lastLatencyMs <= 380
-                    ? "bg-blue-500/20 text-blue-300 border-blue-500/40"
-                    : "bg-amber-500/20 text-amber-300 border-amber-500/40"
-                }`}
-              >
-                <span>{lastLatencyMs} ms</span>
-                <span className="text-[10px] font-semibold opacity-80">
-                  {lastLatencyMs < 250 ? "(Optimal)" : lastLatencyMs <= 380 ? "(Normal)" : "(Delayed)"}
-                </span>
-              </span>
-            ) : (
-              <span className="text-xs text-muted-foreground italic">Acquiring target...</span>
-            )}
-
-            {latencyHistory.length > 1 && (
-              <span className="text-[11px] text-muted-foreground border-l border-white/10 pl-3">
-                Mean:{" "}
-                <b className="text-white">
-                  {Math.round(
-                    latencyHistory.reduce((a, b) => a + b, 0) / latencyHistory.length
-                  )}{" "}
-                  ms
-                </b>
-              </span>
-            )}
-          </div>
-
-          {/* Central Anchor Dot */}
-          <div className="w-5 h-5 rounded-full bg-primary/40 border-2 border-primary flex items-center justify-center">
-            <div className="w-2 h-2 rounded-full bg-white" />
-          </div>
-
-          {/* Flash Target */}
-          {isPlaying && flashPosition && (
-            <motion.button
-              key={`${flashPosition.x}-${flashPosition.y}`}
-              initial={{ scale: 0, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0, opacity: 0 }}
-              transition={{ type: "spring", stiffness: 400, damping: 25 }}
-              style={{ left: `${flashPosition.x}%`, top: `${flashPosition.y}%` }}
-              onClick={(e) => {
-                if (containerRef.current) {
-                  const rect = containerRef.current.getBoundingClientRect();
-                  handleTargetHit(e.clientX - rect.left, e.clientY - rect.top);
-                }
-              }}
-              className={`absolute z-20 w-14 h-14 rounded-full flex items-center justify-center text-white shadow-2xl hover:scale-125 transition-transform ${
-                isGazeLocked
-                  ? "bg-emerald-500 shadow-[0_0_35px_rgba(52,211,153,1)]"
-                  : "bg-accent shadow-[0_0_30px_rgba(59,130,246,0.9)]"
+      {/* ACTIVE THERAPY TARGET (Positioned dynamically according to step state) */}
+      {isPlaying && (
+        <motion.div
+          key={`step-${currentStepIndex}`}
+          initial={{ scale: 0.8, opacity: 0 }}
+          animate={{
+            scale: isGazeLocked ? 1.15 : 1.0,
+            opacity: 1,
+            left: `${targetPos.x * 100}%`,
+            top: `${targetPos.y * 100}%`,
+          }}
+          transition={{ type: "spring", stiffness: 350, damping: 28 }}
+          className="absolute z-20 -translate-x-1/2 -translate-y-1/2 cursor-pointer group"
+          onClick={() => {
+            // Space/click manual fallback to register hit
+            setCorrectMovements((c) => c + 1);
+            setTherapyState("CORRECT");
+          }}
+        >
+          <div className="relative w-16 h-16 sm:w-20 sm:h-20 flex items-center justify-center">
+            {/* Target Glow Pulse */}
+            <div
+              className={`absolute inset-0 rounded-full transition-all duration-200 ${
+                therapyState === "CORRECT"
+                  ? "bg-emerald-400/50 blur-xl scale-125 animate-ping"
+                  : isGazeLocked
+                  ? "bg-emerald-400/40 blur-xl scale-110"
+                  : "bg-primary/30 blur-lg animate-pulse"
               }`}
-            >
-              <Zap size={24} className="animate-pulse" />
-            </motion.button>
-          )}
+            />
 
-          <div className="absolute bottom-6 bg-black/75 backdrop-blur-md px-4 py-2 rounded-full text-xs text-white/90 border border-white/10 font-semibold flex items-center gap-2">
-            <Eye size={14} className="text-emerald-400 animate-pulse" />
-            <span>Look directly at the flash target to trigger automatic saccadic hit!</span>
+            {pediatricMode ? (
+              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-3xl bg-amber-400/20 border-2 border-amber-400 flex items-center justify-center text-3xl sm:text-4xl shadow-[0_0_30px_rgba(251,191,36,0.8)]">
+                {currentThemeEmoji}
+              </div>
+            ) : exercise.id === "blink-master" ? (
+              <div
+                className={`w-14 h-14 sm:w-16 sm:h-16 rounded-full border-2 border-white flex items-center justify-center shadow-2xl transition-all ${
+                  gazeFrame?.isBlinking ? "bg-emerald-500 scale-110" : "bg-blue-600"
+                }`}
+              >
+                <Eye size={28} className="text-white" />
+              </div>
+            ) : (
+              <div
+                className={`w-14 h-14 sm:w-16 sm:h-16 rounded-full border-2 border-white flex items-center justify-center shadow-2xl transition-all ${
+                  therapyState === "CORRECT"
+                    ? "bg-emerald-500 shadow-[0_0_35px_rgba(52,211,153,1)]"
+                    : isGazeLocked
+                    ? "bg-emerald-500 shadow-[0_0_25px_rgba(52,211,153,0.8)]"
+                    : "bg-primary shadow-[0_0_25px_rgba(20,184,166,0.8)]"
+                }`}
+              >
+                <div className="w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full bg-white animate-ping opacity-80" />
+                <div className="w-2.5 h-2.5 rounded-full bg-primary-foreground absolute" />
+              </div>
+            )}
           </div>
-        </div>
+        </motion.div>
       )}
 
-      {/* --- EXERCISE 4: CONVERGENCE PUSHUPS --- */}
-      {exercise.id === "convergence-pushup" && (
-        <div className="relative flex flex-col items-center justify-center space-y-4">
-          <motion.div
-            animate={{
-              scale: isPlaying ? [1, 2.2, 1] : 1,
-            }}
-            transition={{
-              duration: 4 / speed,
-              repeat: Infinity,
-              ease: "easeInOut",
-            }}
-            onClick={(e) => {
-              if (containerRef.current) {
-                const rect = containerRef.current.getBoundingClientRect();
-                handleTargetHit(e.clientX - rect.left, e.clientY - rect.top);
-              }
-            }}
-            className="w-28 h-28 rounded-full bg-primary/20 border-4 border-primary flex items-center justify-center shadow-2xl cursor-pointer"
-          >
-            <div className="w-10 h-10 rounded-full bg-primary animate-pulse flex items-center justify-center">
-              <div className="w-3 h-3 bg-white rounded-full" />
-            </div>
-          </motion.div>
-          <div className="text-center space-y-1">
-            <p className="text-xs font-bold text-white">Follow target as it approaches near-point fusion</p>
-            <p className="text-[11px] text-emerald-400 font-semibold">
-              {isGazeLocked ? "✓ Binocular Convergence Aligned" : "Maintain Single Unified Target"}
-            </p>
-          </div>
-        </div>
-      )}
+      {/* Central Reference Crosshair Marker */}
+      <div className="w-3 h-3 rounded-full bg-white/20 pointer-events-none flex items-center justify-center">
+        <div className="w-1 h-1 rounded-full bg-white/60" />
+      </div>
 
-      {/* --- EXERCISE 5: BLINK MASTER / DIGITAL REST 20-20-20 --- */}
-      {(exercise.id === "blink-master" || exercise.id === "visual-rest") && (
-        <div className="relative flex flex-col items-center justify-center space-y-6">
-          <motion.div
-            animate={{
-              scale: gazeFrame?.isBlinking ? [1, 0.8, 1] : [1, 1.05, 1],
-            }}
-            transition={{ duration: 0.3 }}
-            className={`w-36 h-36 rounded-full border-4 flex items-center justify-center transition-all shadow-2xl ${
-              gazeFrame?.isBlinking
-                ? "bg-emerald-500/20 border-emerald-400 shadow-[0_0_40px_rgba(52,211,153,0.8)]"
-                : "bg-blue-500/10 border-blue-400/60"
-            }`}
-          >
-            <Eye size={48} className={gazeFrame?.isBlinking ? "text-emerald-400" : "text-blue-400"} />
-          </motion.div>
-
-          <div className="text-center space-y-2 max-w-sm">
-            <p className="text-sm font-bold text-white">
-              {gazeFrame?.isBlinking ? "✓ Complete Blink Detected!" : "Perform Full, Deliberate Eye Closures"}
-            </p>
-            <div className="inline-flex gap-4 bg-black/60 px-4 py-2 rounded-2xl text-xs text-white/90">
-              <span>Blinks: <b className="text-emerald-400">{detectedBlinksCount}</b></span>
-              <span className="text-white/30">|</span>
-              <span>EAR: <b className="text-primary">{gazeFrame?.ear ?? 0.32}</b></span>
-              <span className="text-white/30">|</span>
-              <span>BPM: <b className="text-secondary">{gazeFrame?.blinkRatePerMin ?? 16}</b></span>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* --- SYNCHRONIZED VOICE COACH & REAL-TIME BIOFEEDBACK HUD --- */}
+      {/* BOTTOM HUD: Real-time Multi-language Voice Instruction & Guidance Banner */}
       {isPlaying && (
         <div className="absolute bottom-3 left-3 right-3 sm:bottom-4 sm:left-6 sm:right-auto z-40 flex items-center justify-between sm:justify-start gap-2 pointer-events-auto flex-wrap sm:flex-nowrap">
           <div
-            className={`px-2.5 sm:px-3.5 py-1 sm:py-1.5 rounded-full border text-[11px] sm:text-xs font-bold flex items-center gap-1.5 sm:gap-2 backdrop-blur-md shadow-2xl transition-all max-w-[75%] sm:max-w-none truncate ${
-              coachFeedback?.status === "aligned"
-                ? "bg-emerald-950/85 border-emerald-500/50 text-emerald-300 shadow-[0_0_15px_rgba(16,185,129,0.3)]"
-                : coachFeedback?.status === "correcting"
-                ? "bg-amber-950/85 border-amber-500/50 text-amber-300 shadow-[0_0_15px_rgba(245,158,11,0.3)]"
-                : "bg-black/85 border-white/15 text-white/90"
+            className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-full border text-xs sm:text-sm font-bold flex items-center gap-2 backdrop-blur-md shadow-2xl transition-all max-w-[80%] sm:max-w-none truncate ${
+              therapyState === "CORRECT"
+                ? "bg-emerald-950/90 border-emerald-500 text-emerald-300 shadow-[0_0_20px_rgba(16,185,129,0.4)]"
+                : therapyState === "INCORRECT"
+                ? "bg-amber-950/90 border-amber-500 text-amber-300 shadow-[0_0_20px_rgba(245,158,11,0.4)]"
+                : "bg-black/85 border-white/15 text-white"
             }`}
           >
-            <span className="relative flex h-2 w-2">
+            <span className="relative flex h-2.5 w-2.5 shrink-0">
               <span
                 className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
-                  coachFeedback?.status === "aligned" ? "bg-emerald-400" : "bg-amber-400"
+                  therapyState === "CORRECT" ? "bg-emerald-400" : "bg-primary"
                 }`}
               />
               <span
-                className={`relative inline-flex rounded-full h-2 w-2 ${
-                  coachFeedback?.status === "aligned" ? "bg-emerald-500" : "bg-amber-500"
+                className={`relative inline-flex rounded-full h-2.5 w-2.5 ${
+                  therapyState === "CORRECT" ? "bg-emerald-500" : "bg-primary"
                 }`}
               />
             </span>
-            <span className="uppercase tracking-wider text-[10px] text-white/60 font-bold flex items-center gap-1">
+            <span className="uppercase tracking-wider text-[10px] text-white/70 font-black flex items-center gap-1 shrink-0">
               <span>{voiceCoach.getLanguageOption().flag}</span>
               <span>{voiceCoach.getLanguageOption().nativeName}:</span>
             </span>
-            <span className="font-bold">
-              {coachFeedback?.instruction || voiceCoach.getPromptText("follow_target")}
+            <span className="font-extrabold truncate">
+              {instructionText || voiceCoach.getPromptText("follow_target")}
             </span>
           </div>
 
@@ -716,15 +680,15 @@ export const TherapyCanvas: React.FC<TherapyCanvasProps> = ({
               voiceCoach.setMuted(next);
               setIsVoiceMuted(next);
             }}
-            className={`px-3 py-1.5 rounded-full border text-xs font-bold flex items-center gap-1.5 backdrop-blur-md transition-all ${
+            className={`px-3 py-1.5 rounded-full border text-xs font-bold flex items-center gap-1.5 backdrop-blur-md transition-all cursor-pointer ${
               isVoiceMuted
                 ? "bg-black/80 border-white/10 text-muted-foreground hover:text-white"
-                : "bg-primary/20 border-primary/40 text-primary hover:bg-primary/30"
+                : "bg-primary/20 border-primary/50 text-primary hover:bg-primary/30"
             }`}
             title={isVoiceMuted ? "Unmute Voice Coach Guidance" : "Mute Voice Coach Guidance"}
           >
             {isVoiceMuted ? <VolumeX size={13} /> : <Volume2 size={13} />}
-            <span className="text-[10px] uppercase font-bold">{isVoiceMuted ? "Muted" : "Voice Active"}</span>
+            <span className="text-[10px] uppercase font-bold">{isVoiceMuted ? "Muted" : "Voice ON"}</span>
           </button>
         </div>
       )}

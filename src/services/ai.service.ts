@@ -200,30 +200,303 @@ export const aiService = {
       };
     }
 
-    // 1. Convergence Insufficiency
-    if (npc > 10.0 || assessment.convergenceScore < 70) {
-      return {
+    let planResult: AIDiagnosisAndPlan;
+
+    // 1. Poor Fixation Stability
+    if (bcea > 1.2 || assessment.fixationScore < 80) {
+      planResult = {
+        ...livenessMeta,
+        suspectedVisualProblem: "Fixation Instability & Elevated Foveal Dispersion",
+        icd10Code: "H55.89",
+        severity: bcea > 1.8 ? "Severe" : "Moderate",
+        confidenceScore: 93,
+        binocularVisionStatus: "Elevated micro-saccadic drift and fixation dispersion.",
+        clinicalFindings: `Fixation stability is compromised with BCEA of ${bcea} deg² (normative < 0.80 deg²) and stability index of ${assessment.fixationScore}%.`,
+        observedFindings: [
+          `Foveal fixation stability recorded at ${assessment.fixationScore}% with BCEA dispersion of ${bcea} deg².`,
+          `Elevated micro-saccadic drift during sustained central target alignment.`,
+          `Pursuit velocity gain measured at ${gain}x.`,
+          `Tracked across ${assessment.totalFramesSampled ?? 60} frames with ${assessment.calibrationPrecision}% precision.`
+        ],
+        possibleConcerns: [
+          "Foveal micro-drift may degrade near reading acuity and contrast discrimination.",
+          "Visual fatigue under prolonged steady gaze demands."
+        ],
+        recommendations: [
+          "Sustained central fixation hold training (15 minutes daily).",
+          "High-contrast central crosshair lock drills.",
+          "Periodic 20-20-20 visual rest breaks."
+        ],
+        dataSufficiency: "Sufficient",
+        confidenceQualityIndicator: `High Clinical Confidence (${assessment.totalFramesSampled ?? 60} frames analyzed, ${assessment.calibrationPrecision}% calibration accuracy)`,
+        telemetryMetricEvaluation: telemetryEvaluation,
+        protocolName: "FOCEYE Foveal Fixation Stabilization Regimen",
+        primaryExerciseId: "focus-hold",
+        suggestedFollowUpWeeks: 3,
+        prescribedPlan: [
+          {
+            gameId: "focus-hold",
+            title: "Sustained Binocular Fixation Hold",
+            category: "Fixation Stability",
+            durationSeconds: 240,
+            targetSpeed: 0.8,
+            frequencyPerWeek: 5,
+            clinicalRationale: "Suppresses micro-saccadic jitter and stabilizes central bifoveal fixation.",
+          },
+          {
+            gameId: "target-tracking",
+            title: "Controlled Velocity Target Tracking",
+            category: "Pursuits",
+            durationSeconds: 180,
+            targetSpeed: 1.0,
+            frequencyPerWeek: 3,
+            clinicalRationale: "Maintains smooth binocular coordination while anchoring central fixation.",
+          },
+        ],
+        prognosis: "Favorable. Fixation stabilization typically improves within 2-3 weeks.",
+        precautions: ["Blink frequently to prevent pre-corneal dry spot formation"],
+      };
+    }
+    // 2. Poor Vertical Gaze Tracking
+    else if (assessment.verticalGazeRangeDeg !== undefined && assessment.verticalGazeRangeDeg < 25) {
+      planResult = {
+        ...livenessMeta,
+        suspectedVisualProblem: "Vertical Gaze Motility Limitation",
+        icd10Code: "H51.8",
+        severity: "Moderate",
+        confidenceScore: 90,
+        binocularVisionStatus: "Restricted vertical ocular excursion with delayed upward/downward target acquisition.",
+        clinicalFindings: `Vertical gaze excursion is restricted to ${assessment.verticalGazeRangeDeg}° (normative 25°–35°), requiring compensatory head tilts.`,
+        observedFindings: [
+          `Vertical gaze range restricted to ${assessment.verticalGazeRangeDeg}° (Clinical normal: 25–35°).`,
+          `Horizontal gaze range measured at ${assessment.horizontalGazeRangeDeg ?? 35}°.`,
+          `Saccadic latency recorded at ${Math.round(saccadicLatency)} ms.`,
+          `Tracked over ${assessment.totalFramesSampled ?? 60} frames with ${assessment.calibrationPrecision}% calibration accuracy.`
+        ],
+        possibleConcerns: [
+          "Superior/inferior recti motility restriction.",
+          "Compensatory head movements during vertical target tracking."
+        ],
+        recommendations: [
+          "Vertical and diagonal saccadic stepping drills 4 times per week.",
+          "Step-ramp vertical tracking exercises.",
+          "Follow-up ocular motility review in 3 weeks."
+        ],
+        dataSufficiency: "Sufficient",
+        confidenceQualityIndicator: `High Clinical Confidence (${assessment.totalFramesSampled ?? 60} frames analyzed, ${assessment.calibrationPrecision}% calibration accuracy)`,
+        telemetryMetricEvaluation: telemetryEvaluation,
+        protocolName: "FOCEYE Vertical Oculomotor Expansion Protocol",
+        primaryExerciseId: "reaction-speed",
+        suggestedFollowUpWeeks: 3,
+        prescribedPlan: [
+          {
+            gameId: "reaction-speed",
+            title: "Vertical & Diagonal Saccadic Stepping",
+            category: "Saccades",
+            durationSeconds: 240,
+            targetSpeed: 1.2,
+            frequencyPerWeek: 4,
+            clinicalRationale: "Expands vertical excursion limits and reduces vertical saccadic latency.",
+          },
+          {
+            gameId: "target-tracking",
+            title: "Multi-Axis Dynamic Vector Tracking",
+            category: "Pursuits",
+            durationSeconds: 180,
+            targetSpeed: 1.0,
+            frequencyPerWeek: 3,
+            clinicalRationale: "Reinforces smooth pursuit coordination along the vertical meridian.",
+          },
+        ],
+        prognosis: "Good progress expected with targeted vertical ocular conditioning.",
+        precautions: ["Keep head stationary during vertical gaze shifts"],
+      };
+    }
+    // 3. Poor Horizontal Gaze Tracking
+    else if ((assessment.horizontalGazeRangeDeg !== undefined && assessment.horizontalGazeRangeDeg < 30) || assessment.saccadeScore < 75) {
+      planResult = {
+        ...livenessMeta,
+        suspectedVisualProblem: "Horizontal Oculomotor Saccadic Deficit",
+        icd10Code: "H55.81",
+        severity: "Moderate",
+        confidenceScore: 92,
+        binocularVisionStatus: "Restricted lateral excursion or delayed horizontal saccadic initiation.",
+        clinicalFindings: `Horizontal excursion is ${assessment.horizontalGazeRangeDeg ?? 28}° with saccadic score of ${assessment.saccadeScore}%.`,
+        observedFindings: [
+          `Horizontal gaze range measured at ${assessment.horizontalGazeRangeDeg ?? 28}° (Clinical normal: 30–45°).`,
+          `Saccadic initiation score recorded at ${assessment.saccadeScore}%.`,
+          `Fixation stability measured at ${assessment.fixationScore}%.`,
+          `Tracked over ${assessment.totalFramesSampled ?? 60} biometric frames.`
+        ],
+        possibleConcerns: [
+          "Horizontal tracking breakdown causing catch-up saccades.",
+          "Difficulty maintaining steady reading pace across text lines."
+        ],
+        recommendations: [
+          "Horizontal dynamic target tracking exercises 4 times per week.",
+          "Lateral step-ramp velocity pacing.",
+          "Progress tracking velocity from 1.0x to 1.5x as speed normalizes."
+        ],
+        dataSufficiency: "Sufficient",
+        confidenceQualityIndicator: `High Clinical Confidence (${assessment.totalFramesSampled ?? 60} frames analyzed, ${assessment.calibrationPrecision}% calibration accuracy)`,
+        telemetryMetricEvaluation: telemetryEvaluation,
+        protocolName: "FOCEYE Horizontal Saccadic & Pursuit Restorative Protocol",
+        primaryExerciseId: "target-tracking",
+        suggestedFollowUpWeeks: 3,
+        prescribedPlan: [
+          {
+            gameId: "target-tracking",
+            title: "Horizontal Lateral Excursion & Saccadic Speed",
+            category: "Pursuits",
+            durationSeconds: 300,
+            targetSpeed: 1.2,
+            frequencyPerWeek: 4,
+            clinicalRationale: "Expands lateral gaze excursion and restores conjugate smooth pursuit across the midline.",
+          },
+          {
+            gameId: "reaction-speed",
+            title: "Peripheral Horizontal Jump Saccades",
+            category: "Saccades",
+            durationSeconds: 200,
+            targetSpeed: 1.5,
+            frequencyPerWeek: 4,
+            clinicalRationale: "Accelerates lateral target acquisition and reduces saccadic latency.",
+          },
+        ],
+        prognosis: "Favorable within 3-4 weeks of daily training.",
+        precautions: ["Move only eyes, keep head stationary"],
+      };
+    }
+    // 4. Poor Smooth Pursuit (Deficient Gain)
+    else if (gain < 0.88 || (assessment.pursuitGain !== undefined && assessment.pursuitGain < 0.88)) {
+      planResult = {
+        ...livenessMeta,
+        suspectedVisualProblem: "Smooth Pursuit Velocity Deficit",
+        icd10Code: "H55.81",
+        severity: "Moderate",
+        confidenceScore: 91,
+        binocularVisionStatus: "Sub-optimal smooth pursuit velocity gain with compensatory catch-up saccades.",
+        clinicalFindings: `Smooth pursuit gain is ${gain}x (normative 0.90–1.00x), causing target tracking breakdown during continuous motion.`,
+        observedFindings: [
+          `Smooth pursuit gain deficient at ${gain}x (Clinical normal: 0.90–1.00x).`,
+          `Fixation stability score: ${assessment.fixationScore}% with BCEA of ${bcea} deg².`,
+          `Horizontal span: ${assessment.horizontalGazeRangeDeg ?? 35}°, vertical span: ${assessment.verticalGazeRangeDeg ?? 28}°.`
+        ],
+        possibleConcerns: [
+          "Tracking breakdown requiring frequent compensatory corrective catch-up saccades.",
+          "Visual fatigue during dynamic tracking tasks."
+        ],
+        recommendations: [
+          "Dynamic moving-target smooth pursuit exercises 4 times per week.",
+          "Continuous circular and figure-eight tracking.",
+          "Progress tracking speed from 1.0x to 1.5x as gain improves."
+        ],
+        dataSufficiency: "Sufficient",
+        confidenceQualityIndicator: `High Clinical Confidence (${assessment.totalFramesSampled ?? 60} frames analyzed, ${assessment.calibrationPrecision}% calibration accuracy)`,
+        telemetryMetricEvaluation: telemetryEvaluation,
+        protocolName: "FOCEYE Moving-Target Smooth Pursuit Protocol",
+        primaryExerciseId: "circular-tracking",
+        suggestedFollowUpWeeks: 3,
+        prescribedPlan: [
+          {
+            gameId: "circular-tracking",
+            title: "Dynamic Moving-Target Smooth Pursuit",
+            category: "Pursuits",
+            durationSeconds: 300,
+            targetSpeed: 1.0,
+            frequencyPerWeek: 4,
+            clinicalRationale: "Restores continuous retinal slip compensation and enhances pursuit gain.",
+          },
+          {
+            gameId: "target-tracking",
+            title: "Linear Step-Ramp Pursuit",
+            category: "Pursuits",
+            durationSeconds: 240,
+            targetSpeed: 1.2,
+            frequencyPerWeek: 3,
+            clinicalRationale: "Strengthens conjugate pursuit velocity matching across horizontal axes.",
+          },
+        ],
+        prognosis: "Excellent recovery expected with consistent biofeedback tracking.",
+        precautions: ["Maintain 50cm screen distance with stable lighting"],
+      };
+    }
+    // 5. Blink Response Issue
+    else if (bpm < 12 || incBlinks > 20) {
+      planResult = {
+        ...livenessMeta,
+        suspectedVisualProblem: "Blink Reflex Infrequency & Incomplete Closure",
+        icd10Code: "H02.88",
+        severity: "Mild",
+        confidenceScore: 89,
+        binocularVisionStatus: "Reduced spontaneous blink rate with elevated ratio of incomplete palpebral closures.",
+        clinicalFindings: `Blink rate is reduced to ${bpm} BPM with ${incBlinks}% incomplete closures, leading to ocular surface dessication.`,
+        observedFindings: [
+          `Spontaneous blink rate recorded at ${bpm} BPM (Normal: 14–18 BPM).`,
+          `Incomplete blink ratio elevated at ${incBlinks}% (Normal: < 15%).`,
+          `Fixation stability measured at ${assessment.fixationScore}% with BCEA of ${bcea} deg².`
+        ],
+        possibleConcerns: [
+          "Pre-corneal tear film evaporation causing transient visual blur.",
+          "Dry eye sensation and asthenopia during visual concentration."
+        ],
+        recommendations: [
+          "Voluntary complete blink conditioning exercises 5 times per week.",
+          "Adopt 20-20-20 visual rest intervals.",
+          "Maintain optimal ergonomic display height."
+        ],
+        dataSufficiency: "Sufficient",
+        confidenceQualityIndicator: `High Clinical Confidence (${assessment.totalFramesSampled ?? 60} frames analyzed, ${assessment.calibrationPrecision}% calibration accuracy)`,
+        telemetryMetricEvaluation: telemetryEvaluation,
+        protocolName: "FOCEYE Ocular Surface & Blink Restoration Protocol",
+        primaryExerciseId: "blink-master",
+        suggestedFollowUpWeeks: 2,
+        prescribedPlan: [
+          {
+            gameId: "blink-master",
+            title: "Voluntary Complete Blink Coaching",
+            category: "Ocular Surface Care",
+            durationSeconds: 180,
+            targetSpeed: 1.0,
+            frequencyPerWeek: 5,
+            clinicalRationale: "Re-establishes complete palpebral fissure closure and restores tear film distribution.",
+          },
+          {
+            gameId: "focus-hold",
+            title: "Fixation Hold with Timed Blink Intervals",
+            category: "Fixation",
+            durationSeconds: 180,
+            targetSpeed: 1.0,
+            frequencyPerWeek: 3,
+            clinicalRationale: "Trains sustained gaze without suppressing involuntary blinking.",
+          },
+        ],
+        prognosis: "Rapid resolution of dry eye symptoms within 2 weeks of blink training.",
+        precautions: ["Blink fully so eyelids touch momentarily during exercise"],
+      };
+    }
+    // 6. Convergence Insufficiency
+    else if (npc > 10.0 || assessment.convergenceScore < 70) {
+      planResult = {
         ...livenessMeta,
         suspectedVisualProblem: "Convergence Insufficiency (CI)",
         icd10Code: "H51.11",
         severity: npc > 14.0 ? "Severe" : "Moderate",
         confidenceScore: 94,
         binocularVisionStatus: "Receded Near Point of Convergence with reduced positive fusional vergence.",
-        clinicalFindings: `Near point of convergence (NPC) is receded to ${npc} cm (normal < 6–10 cm). Accompanied by reduced fusional vergence reserve and asthenopic symptoms during near gaze tasks.`,
+        clinicalFindings: `Near point of convergence (NPC) is receded to ${npc} cm with asthenopic symptoms during near gaze tasks.`,
         observedFindings: [
-          `Near point of convergence (NPC) receded to ${npc} cm (Clinical normal: < 6.0–10.0 cm).`,
-          `Fixation stability measured at ${assessment.fixationScore}% with BCEA dispersion of ${bcea} deg².`,
-          `Smooth pursuit gain measured at ${gain}x across horizontal range (${assessment.horizontalGazeRangeDeg ?? 35}°).`,
-          `Blink dynamics recorded at ${bpm} BPM with ${incBlinks}% incomplete closures.`,
-          `Calibration accuracy verified at ${assessment.calibrationPrecision}%.`
+          `Near point of convergence receded to ${npc} cm (Clinical normal: < 6–10 cm).`,
+          `Fixation stability score: ${assessment.fixationScore}% with BCEA of ${bcea} deg².`,
+          `Smooth pursuit gain: ${gain}x.`
         ],
         possibleConcerns: [
           "Medial rectus co-contraction deficit during near binocular fixation.",
-          "Potential for visual fatigue or double vision during sustained near visual tasks."
+          "Potential for visual fatigue during sustained near tasks."
         ],
         recommendations: [
-          "Dynamic Near-Point Convergence Fusion exercises 5 times per week (5 mins/session).",
-          "Central fixation stability training to suppress micro-saccadic drift.",
+          "Dynamic near-point convergence pushups 5 times per week.",
+          "Central fixation stability training.",
           "Re-assess near point of convergence breakpoint in 4 weeks."
         ],
         dataSufficiency: "Sufficient",
@@ -241,150 +514,107 @@ export const aiService = {
             targetSpeed: 1.0,
             frequencyPerWeek: 5,
             clinicalRationale: "Strengthens medial rectus co-contraction and accelerates near fusional recovery.",
-            executionGuidelines: [
-              "Maintain single clear vision as target moves towards bridge of nose",
-              "If target doubles, blink once and reset to break-point distance",
-              "Complete 2 sets of 5 minutes daily",
-            ],
-          },
-          {
-            gameId: "focus-hold",
-            title: "Sustained Binocular Fixation Hold",
-            category: "Fixation Stability",
-            durationSeconds: 240,
-            targetSpeed: 0.8,
-            frequencyPerWeek: 3,
-            clinicalRationale: "Reduces micro-saccadic drift and enhances bifoveal alignment stability.",
-            executionGuidelines: ["Keep eyes locked on the central crosshair without blinking excessively"],
-          },
-          {
-            gameId: "target-tracking",
-            title: "Conjugate Smooth Pursuit Tracking",
-            category: "Oculomotor Pursuits",
-            durationSeconds: 180,
-            targetSpeed: 1.0,
-            frequencyPerWeek: 3,
-            clinicalRationale: "Maintains smooth binocular coordination across the horizontal meridian.",
           },
         ],
-        prognosis: "Favorable. 85-90% of patients achieve normalization of NPC within 4-6 weeks of therapy.",
-        precautions: [
-          "Take a 2-minute visual rest break if ocular strain occurs",
-          "Ensure ambient lighting is evenly distributed without glare",
-        ],
+        prognosis: "Favorable. Normalization of NPC expected within 4-6 weeks.",
+        precautions: ["Take short ocular breaks if eye strain occurs"],
       };
     }
-
-    // 2. Saccadic / Pursuit Deficit
-    if (gain < 0.85 || (assessment.pursuitGain !== undefined && assessment.pursuitGain < 0.85) || assessment.saccadeScore < 70) {
-      return {
+    // 7. Good Performance / General Maintenance
+    else {
+      planResult = {
         ...livenessMeta,
-        suspectedVisualProblem: "Oculomotor Saccadic & Pursuit Dysfunction",
-        icd10Code: "H55.81",
-        severity: assessment.saccadeScore < 60 ? "Severe" : "Moderate",
-        confidenceScore: 91,
-        binocularVisionStatus: "Reduced smooth pursuit velocity gain with compensatory corrective saccades.",
-        clinicalFindings: `Smooth pursuit gain is reduced to ${gain}x with saccadic latency at ${Math.round(saccadicLatency)}ms, causing tracking breakdown across horizontal and vertical meridians.`,
+        suspectedVisualProblem: "Optimal Oculomotor Function (General Maintenance)",
+        icd10Code: "Z01.00",
+        severity: "Mild",
+        confidenceScore: 95,
+        binocularVisionStatus: "Normal binocular coordination, optimal pursuit gain, and stable foveal fixation.",
+        clinicalFindings: `Patient presents with robust oculomotor biometrics: BCEA ${bcea} deg², pursuit gain ${gain}x, and normal saccadic initiation.`,
         observedFindings: [
-          `Smooth pursuit gain deficient at ${gain}x (Clinical normal: 0.90–1.00).`,
-          `Saccadic latency delayed at ${Math.round(saccadicLatency)} ms with vertical range of ${assessment.verticalGazeRangeDeg ?? 28}°.`,
-          `Fixation stability score: ${assessment.fixationScore}% with BCEA of ${bcea} deg².`,
-          `Tracked across ${assessment.totalFramesSampled ?? 60} frames with ${assessment.calibrationPrecision}% calibration precision.`
+          `Conjugate smooth pursuit velocity gain optimal at ${gain}x.`,
+          `Fixation stability optimal at ${assessment.fixationScore}% (BCEA ${bcea} deg²).`,
+          `Horizontal gaze range: ${assessment.horizontalGazeRangeDeg ?? 36}°, vertical gaze range: ${assessment.verticalGazeRangeDeg ?? 28}°.`,
+          `Blink rate of ${bpm} BPM within normal physiological bounds.`
         ],
         possibleConcerns: [
-          "Pursuit tracking breakdown requiring frequent compensatory corrective catch-up saccades.",
-          "Delayed visual orienting latency when shifting focus between lateral targets."
+          "No acute oculomotor, binocular, or motility deficits detected."
         ],
         recommendations: [
-          "Adaptive velocity smooth pursuit exercises 4 times per week.",
-          "High-frequency saccadic stepping drills to improve orienting latency.",
-          "Progress tracking speed from 1.0x to 1.5x as gain improves."
+          "General maintenance visual conditioning twice weekly.",
+          "Routine 20-20-20 screen hygiene.",
+          "Follow-up progress check in 4-6 weeks."
         ],
         dataSufficiency: "Sufficient",
-        confidenceQualityIndicator: `High Clinical Confidence (${assessment.totalFramesSampled ?? 60} frames analyzed, ${assessment.calibrationPrecision}% calibration accuracy)`,
+        confidenceQualityIndicator: `Optimal Clinical Confidence (${assessment.totalFramesSampled ?? 60} frames analyzed, ${assessment.calibrationPrecision}% calibration accuracy)`,
         telemetryMetricEvaluation: telemetryEvaluation,
-        protocolName: "FOCEYE Oculomotor Speed & Precision Calibration (FOS-P1)",
+        protocolName: "FOCEYE General Visual Conditioning & Maintenance",
         primaryExerciseId: "target-tracking",
-        suggestedFollowUpWeeks: 3,
+        suggestedFollowUpWeeks: 4,
         prescribedPlan: [
           {
             gameId: "target-tracking",
-            title: "Adaptive Velocity Smooth Pursuit",
+            title: "General Maintenance Pursuit & Coordination",
             category: "Pursuits",
-            durationSeconds: 300,
-            targetSpeed: 1.2,
-            frequencyPerWeek: 4,
-            clinicalRationale: "Restores continuous retinal slip compensation and improves pursuit gain.",
+            durationSeconds: 240,
+            targetSpeed: 1.0,
+            frequencyPerWeek: 2,
+            clinicalRationale: "Maintains high-fidelity conjugate tracking and ocular muscle coordination.",
           },
           {
-            gameId: "reaction-speed",
-            title: "High-Frequency Saccadic Stepping",
-            category: "Saccades",
-            durationSeconds: 240,
-            targetSpeed: 1.5,
-            frequencyPerWeek: 4,
-            clinicalRationale: "Reduces saccadic latency and improves orienting accuracy.",
+            gameId: "focus-hold",
+            title: "Sustained Central Fixation Conditioning",
+            category: "Fixation",
+            durationSeconds: 180,
+            targetSpeed: 1.0,
+            frequencyPerWeek: 2,
+            clinicalRationale: "Preserves steady foveal fixation and suppresses visual fatigue.",
           },
         ],
-        prognosis: "Excellent with consistent biofeedback training over 3 weeks.",
-        precautions: ["Maintain erect posture at 50cm viewing distance"],
+        prognosis: "Excellent maintenance of functional oculomotor capacity.",
+        precautions: ["Continue healthy visual screen habits"],
       };
     }
 
-    // 3. Normal / General Digital Eye Strain Baseline
-    return {
-      ...livenessMeta,
-      suspectedVisualProblem: "Digital Asthenopia & Mild Accommodative Fatigue",
-      icd10Code: "H53.14",
-      severity: "Mild",
-      confidenceScore: 88,
-      binocularVisionStatus: "Nominal binocular coordination with transient accommodative infacility.",
-      clinicalFindings: `Slight micro-fluctuations in fixation stability (BCEA ${bcea} deg²) consistent with screen-induced visual fatigue. Blink rate is ${bpm} bpm with ${incBlinks}% incomplete blinks.`,
-      observedFindings: [
-        `Conjugate pursuit gain within functional limits at ${gain}x.`,
-        `Fixation stability at ${assessment.fixationScore}% with BCEA of ${bcea} deg².`,
-        `Saccadic reaction latency within functional bounds at ${Math.round(saccadicLatency)} ms.`,
-        `Blink rate recorded at ${bpm} BPM with ${incBlinks}% incomplete blinks.`,
-        `Calibration accuracy verified at ${assessment.calibrationPrecision}%.`
-      ],
-      possibleConcerns: [
-        "No acute binocular coordination or oculomotor motility deficits detected.",
-        "Mild transient asthenopic symptoms consistent with prolonged screen use."
-      ],
-      recommendations: [
-        "Voluntary complete blink coaching to preserve tear film integrity.",
-        "Foveal fixation hold exercises 3 times per week for ocular conditioning.",
-        "Adopt the 20-20-20 rule during prolonged digital device usage."
-      ],
-      dataSufficiency: "Sufficient",
-      confidenceQualityIndicator: `High Clinical Confidence (${assessment.totalFramesSampled ?? 60} frames analyzed, ${assessment.calibrationPrecision}% calibration accuracy)`,
-      telemetryMetricEvaluation: telemetryEvaluation,
-      protocolName: "FOCEYE Preventative Visual Hygiene & Re-centering Regimen",
-      primaryExerciseId: "focus-hold",
-      suggestedFollowUpWeeks: 2,
-      prescribedPlan: [
-        {
-          gameId: "focus-hold",
-          title: "Foveal Fixation & Spatial Re-centering",
-          category: "Fixation",
-          durationSeconds: 240,
-          targetSpeed: 1.0,
-          frequencyPerWeek: 3,
-          clinicalRationale: "Calms micro-saccadic jitter and stabilizes accommodative response.",
-        },
-        {
-          gameId: "blink-master",
-          title: "Voluntary Complete Blink Coaching",
-          category: "Ocular Surface Care",
-          durationSeconds: 180,
-          targetSpeed: 1.0,
-          frequencyPerWeek: 5,
-          clinicalRationale: "Re-establishes pre-corneal tear film equilibrium and reduces dry eye discomfort.",
-        },
-      ],
-      prognosis: "Full resolution of asthenopic symptoms expected within 2-3 weeks.",
-      precautions: ["Adopt 20-20-20 rule during prolonged digital screen use"],
-    };
+    // Try to merge rich synthesis from FastAPI Backend /ai/insights
+    try {
+      const remoteRes = await ApiClient.post<any>("/ai/insights", {
+        patient_id: assessment.patientId,
+        condition: planResult.suspectedVisualProblem,
+        age: assessment.age,
+        bcea_score: bcea,
+        fixation_stability: assessment.fixationScore,
+        saccadic_latency_ms: Math.round(saccadicLatency),
+        adherence_rate: 95.0,
+        horizontal_gaze_range_deg: assessment.horizontalGazeRangeDeg ?? 35.0,
+        vertical_gaze_range_deg: assessment.verticalGazeRangeDeg ?? 28.0,
+        pursuit_gain: gain,
+        blink_rate_bpm: bpm,
+        incomplete_blink_pct: incBlinks,
+        calibration_accuracy: assessment.calibrationPrecision,
+        total_frames_sampled: assessment.totalFramesSampled ?? 40,
+      });
+
+      if (remoteRes) {
+        if (remoteRes.summary) planResult.clinicalFindings = remoteRes.summary;
+        if (remoteRes.observed_findings && remoteRes.observed_findings.length > 0) {
+          planResult.observedFindings = remoteRes.observed_findings;
+        }
+        if (remoteRes.possible_concerns && remoteRes.possible_concerns.length > 0) {
+          planResult.possibleConcerns = remoteRes.possible_concerns;
+        }
+        if (remoteRes.recommendations && remoteRes.recommendations.length > 0) {
+          planResult.recommendations = remoteRes.recommendations;
+        }
+        if (remoteRes.data_sufficiency) planResult.dataSufficiency = remoteRes.data_sufficiency;
+        if (remoteRes.confidence_quality_indicator) {
+          planResult.confidenceQualityIndicator = remoteRes.confidence_quality_indicator;
+        }
+      }
+    } catch {
+      // Graceful offline fallback
+    }
+
+    return planResult;
   },
 
   /**

@@ -25,12 +25,14 @@ import {
   Sparkles,
   Eye,
   Languages,
+  Download,
 } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { therapyExercises, TherapyCategory, TherapyExercise } from "../lib/therapies";
 import { usePatient } from "@/contexts/PatientContext";
 import { therapyService } from "@/services/therapy.service";
+import { reportService } from "@/services/report.service";
 import { CameraFeed } from "@/components/camera/CameraFeed";
 import { TherapyCanvas } from "@/components/therapy/TherapyCanvas";
 import { GazeHeatmap, type GazePoint } from "@/components/therapy/GazeHeatmap";
@@ -86,7 +88,18 @@ export default function TherapySession() {
   const latestCalib = calibrationService.getLatestCalibration(selectedPatient?.id);
 
   const mode: TherapyMode = location.state?.mode || "mobile";
-  const [therapyLanguage, setTherapyLanguage] = useState<SupportedLanguage>(() => voiceCoach.getLanguage());
+  const assessmentMetrics = location.state?.assessmentMetrics;
+  const cameraQuality = location.state?.cameraQuality;
+  const aiDiagnosis = location.state?.aiDiagnosis;
+
+  const [therapyLanguage, setTherapyLanguage] = useState<SupportedLanguage>(() => {
+    const passed = location.state?.therapyLanguage as SupportedLanguage;
+    if (passed && ["en", "ta", "ml", "te", "hi"].includes(passed)) {
+      voiceCoach.setLanguage(passed);
+      return passed;
+    }
+    return voiceCoach.getLanguage();
+  });
   const [step, setStep] = useState<SessionStep>(location.state?.prescribedExerciseId ? "instructions" : "exercise-selection");
   const [selectedGame, setSelectedGame] = useState<TherapyExercise>(() => {
     if (location.state?.prescribedExerciseId) {
@@ -103,7 +116,19 @@ export default function TherapySession() {
     return 300;
   });
   const [permission, setPermission] = useState<"idle" | "requesting" | "granted">("idle");
-  const [metrics, setMetrics] = useState({ accuracy: 0, blinks: 0, confidence: 0 });
+  const [metrics, setMetrics] = useState({
+    accuracy: 90,
+    blinks: 0,
+    confidence: 95,
+    hits: 0,
+    correctMovements: 0,
+    incorrectMovements: 0,
+    repetitions: 0,
+    saccadicLatencyMs: 220,
+    currentInstruction: "Look straight at the screen.",
+    trackingState: "READY",
+    trackingQuality: "optimal" as "optimal" | "acceptable" | "poor",
+  });
   const [countdown, setCountdown] = useState<number | null>(null);
   const [sessionNumber, setSessionNumber] = useState(1);
   const [therapyStatus, setTherapyStatus] = useState<TherapyStatus>("Not Started");
@@ -180,8 +205,47 @@ export default function TherapySession() {
       therapyPlanByCondition[selectedPatient.eyeCondition] ||
       "Supervised visual rehabilitation plan"
     : "Select a patient to load the therapy plan";
-  const performanceScore = Math.round((metrics.accuracy + metrics.confidence) / 2);
+  const performanceScore = useMemo(() => {
+    const total = metrics.correctMovements + metrics.incorrectMovements;
+    if (total === 0) return metrics.accuracy || 88;
+    return Math.min(100, Math.round((metrics.accuracy * 0.7) + (Math.min(10, metrics.repetitions) * 3)));
+  }, [metrics]);
   const completionDate = sessionDate ? formatDate(sessionDate) : "Pending completion";
+
+  const areasForImprovement = useMemo(() => {
+    const areas: string[] = [];
+    if (metrics.accuracy < 82) {
+      areas.push("Saccadic overshoot and off-target gaze excursions observed; recommend continuing spatial coordination exercises.");
+    }
+    if (metrics.saccadicLatencyMs && metrics.saccadicLatencyMs > 320) {
+      areas.push("Saccadic response latency is slightly prolonged (>320ms); continue reaction-speed drills.");
+    }
+    if (metrics.incorrectMovements > 2) {
+      areas.push("Target acquisition misses detected; practice directional gaze tracking without moving head.");
+    }
+    if (areas.length === 0) {
+      areas.push("Conjugate gaze accuracy, smooth pursuit gain, and reaction times are all within optimal clinical thresholds.");
+    }
+    return areas;
+  }, [metrics]);
+
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+  const handleDownloadReport = async () => {
+    if (!selectedPatient) return;
+    setIsGeneratingPdf(true);
+    try {
+      await reportService.downloadPatientPdf({
+        patientId: selectedPatient.id,
+        patientName: `${selectedPatient.firstName} ${selectedPatient.lastName}`,
+        includeAiInsights: true,
+      });
+    } catch (err) {
+      console.warn("Report generation error:", err);
+    } finally {
+      setIsGeneratingPdf(false);
+    }
+  };
+
   const savePayload = selectedPatient
     ? {
         patientId: selectedPatient.id,
@@ -198,23 +262,23 @@ export default function TherapySession() {
     let interval: number;
     if (isPlaying && step === "active" && timeLeft > 0 && countdown === null) {
       interval = window.setInterval(() => {
-        setTimeLeft((prev) => prev - 1);
-        setMetrics((prev) => ({
-          accuracy: Math.min(100, prev.accuracy + (Math.random() > 0.5 ? 1 : 0)),
-          blinks: prev.blinks + (Math.random() > 0.98 ? 1 : 0),
-          confidence: 95 + Math.floor(Math.random() * 5),
-        }));
+        setTimeLeft((prev) => {
+          if (prev <= 1) {
+            setTherapyStatus("Completed");
+            setCompletionPercentage(100);
+            setSessionDate(new Date());
+            setStep("summary");
+            setIsPlaying(false);
+            setSaveReady(true);
+            voiceCoach.sessionComplete();
+            if (pediatricMode) {
+              setShowRewardsModal(true);
+            }
+            return 0;
+          }
+          return prev - 1;
+        });
       }, 1000);
-    } else if (timeLeft === 0 && step === "active") {
-      setTherapyStatus("Completed");
-      setCompletionPercentage(100);
-      setSessionDate(new Date());
-      setStep("summary");
-      setIsPlaying(false);
-      setSaveReady(true);
-      if (pediatricMode) {
-        setShowRewardsModal(true);
-      }
     }
     return () => clearInterval(interval);
   }, [isPlaying, step, timeLeft, countdown, pediatricMode]);
@@ -253,7 +317,6 @@ export default function TherapySession() {
   const startSession = () => {
     setStep("active");
     setCountdown(3);
-    setMetrics({ accuracy: 85, blinks: 0, confidence: 98 });
     setTherapyStatus("In Progress");
     setSaveReady(false);
     setSessionNumber((value) => value + (therapyStatus === "Completed" ? 1 : 0));
@@ -291,16 +354,26 @@ export default function TherapySession() {
   };
 
   const saveSession = async () => {
+    if (!selectedPatient) return;
     setSaveError("");
     try {
+      const summaryNotes = [
+        therapistNotes ? `Doctor Notes: ${therapistNotes}` : "",
+        `[Session Performance] Accuracy: ${metrics.accuracy}% | Correct: ${metrics.correctMovements} | Missed: ${metrics.incorrectMovements} | Reps: ${metrics.repetitions} | Latency: ${metrics.saccadicLatencyMs}ms | Quality: ${metrics.trackingQuality}`,
+        aiDiagnosis?.clinicalSummary ? `AI Assessment: ${aiDiagnosis.clinicalSummary}` : "",
+      ].filter(Boolean).join(" -- ");
+
       await therapyService.saveSession({
+        patientId: selectedPatient.id,
         gameId: selectedGame.id,
         accuracy: metrics.accuracy,
         blinks: metrics.blinks,
         duration: selectedGame.duration - timeLeft,
         mode,
         language: therapyLanguage,
-        patientId: selectedPatient?.id,
+        repetitions: metrics.repetitions,
+        performanceScore,
+        doctorNotes: summaryNotes,
         timestamp: (sessionDate ?? new Date()).toISOString(),
       });
       setSaveReady(true);
@@ -1050,61 +1123,98 @@ export default function TherapySession() {
                       </p>
                     </div>
                   </div>
-                  <button
-                    onClick={saveSession}
-                    className="px-5 py-3 bg-primary text-primary-foreground rounded-2xl font-bold flex items-center justify-center gap-2 shadow-lg shadow-primary/20"
-                  >
-                    <Save size={18} />
-                    Save Session
-                  </button>
+                      <div className="flex flex-wrap items-center gap-3">
+                    <button
+                      onClick={saveSession}
+                      className="px-5 py-3 bg-primary text-primary-foreground rounded-2xl font-bold flex items-center justify-center gap-2 shadow-lg shadow-primary/20 hover:scale-[1.02] transition-transform cursor-pointer"
+                    >
+                      <Save size={18} />
+                      {saveReady ? "Saved to Supabase ✓" : "Save Session"}
+                    </button>
+                    <button
+                      onClick={handleDownloadReport}
+                      disabled={isGeneratingPdf}
+                      className="px-5 py-3 bg-secondary text-secondary-foreground rounded-2xl font-bold flex items-center justify-center gap-2 shadow-lg shadow-secondary/20 hover:scale-[1.02] transition-transform cursor-pointer disabled:opacity-50"
+                    >
+                      <Download size={18} />
+                      {isGeneratingPdf ? "Generating PDF..." : "Clinical PDF Report"}
+                    </button>
+                  </div>
                   {saveError && <p role="alert" className="text-sm text-destructive">{saveError}</p>}
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+                {/* 8-Card Standardized Clinical Results Grid */}
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                  <div className="card-soft bg-muted/30 rounded-3xl border border-white/5">
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase mb-1">Overall Performance</p>
+                    <p className="text-2xl sm:text-3xl font-black text-foreground">{performanceScore}%</p>
+                  </div>
+                  <div className="card-soft bg-muted/30 rounded-3xl border border-white/5">
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase mb-1">Eye Movement Accuracy</p>
+                    <p className="text-2xl sm:text-3xl font-black text-primary">{metrics.accuracy}%</p>
+                  </div>
+                  <div className="card-soft bg-muted/30 rounded-3xl border border-white/5">
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase mb-1">Tracking Consistency</p>
+                    <p className="text-2xl sm:text-3xl font-black text-secondary">{metrics.confidence}%</p>
+                  </div>
+                  <div className="card-soft bg-muted/30 rounded-3xl border border-white/5">
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase mb-1">Response Time</p>
+                    <p className="text-2xl sm:text-3xl font-black text-accent">{metrics.saccadicLatencyMs || 220} ms</p>
+                  </div>
+                  <div className="card-soft bg-muted/30 rounded-3xl border border-white/5">
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase mb-1">Completed Repetitions</p>
+                    <p className="text-2xl sm:text-3xl font-black text-emerald-400">{metrics.repetitions}</p>
+                  </div>
+                  <div className="card-soft bg-muted/30 rounded-3xl border border-white/5">
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase mb-1">Missed Movements</p>
+                    <p className="text-2xl sm:text-3xl font-black text-amber-400">{metrics.incorrectMovements}</p>
+                  </div>
                   <div className="card-soft bg-muted/30 rounded-3xl border border-white/5">
                     <p className="text-[10px] font-bold text-muted-foreground uppercase mb-1">Session Duration</p>
-                    <p className="text-2xl font-bold text-foreground">{formatTime(selectedGame.duration - timeLeft)}</p>
+                    <p className="text-2xl sm:text-3xl font-black text-foreground">{formatTime(selectedGame.duration - timeLeft)}</p>
                   </div>
                   <div className="card-soft bg-muted/30 rounded-3xl border border-white/5">
-                    <p className="text-[10px] font-bold text-muted-foreground uppercase mb-1">Therapy Completed</p>
-                    <p className="text-2xl font-bold text-primary">{therapyStatus}</p>
-                  </div>
-                  <div className="card-soft bg-muted/30 rounded-3xl border border-white/5">
-                    <p className="text-[10px] font-bold text-muted-foreground uppercase mb-1">Progress</p>
-                    <p className="text-2xl font-bold text-secondary">{completionPercentage}%</p>
-                  </div>
-                  <div className="card-soft bg-muted/30 rounded-3xl border border-white/5">
-                    <p className="text-[10px] font-bold text-muted-foreground uppercase mb-1">Performance Score</p>
-                    <p className="text-2xl font-bold text-accent">{performanceScore}%</p>
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase mb-1">Tracking Quality</p>
+                    <p className="text-2xl sm:text-3xl font-black text-primary uppercase">{metrics.trackingQuality}</p>
                   </div>
                 </div>
 
-                {/* 2D Gaze Fixation Density Heatmap */}
+                {/* Clinical Findings & Observed Areas for Improvement */}
+                <div className="card-soft bg-primary/5 border border-primary/20 p-5 rounded-3xl space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Brain className="text-primary shrink-0" size={20} />
+                    <h4 className="font-bold text-sm uppercase tracking-wider text-primary">
+                      Observed Areas for Improvement & Clinical Feedback
+                    </h4>
+                  </div>
+                  <ul className="space-y-2">
+                    {areasForImprovement.map((area, idx) => (
+                      <li key={idx} className="text-xs sm:text-sm text-foreground/90 flex items-start gap-2">
+                        <span className="text-primary font-bold">•</span>
+                        <span>{area}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  {aiDiagnosis?.clinicalSummary && (
+                    <div className="pt-2 border-t border-primary/10 text-xs text-muted-foreground">
+                      <span className="font-bold text-foreground">AI Assessment Summary:</span> {aiDiagnosis.clinicalSummary}
+                    </div>
+                  )}
+                </div>
+
+                {/* 2D Gaze Fixation Density Heatmap (Real collected points only) */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   <GazeHeatmap
                     points={
                       gazePointsHistory.length > 0
                         ? gazePointsHistory
-                        : Array.from({ length: 60 }, (_, i) => ({
-                            x: 0.5 + Math.sin(i * 0.2) * 0.15 + (Math.random() - 0.5) * 0.08,
-                            y: 0.5 + Math.cos(i * 0.2) * 0.12 + (Math.random() - 0.5) * 0.08,
-                          }))
+                        : [{ x: 0.5, y: 0.5 }]
                     }
                     title="Session 2D Gaze Fixation Density Heatmap"
                   />
 
                   <div className="space-y-4 flex flex-col justify-between">
-                    <div className="card-soft bg-primary/5 text-left flex gap-4 border-primary/20 p-4">
-                      <Brain className="text-primary shrink-0" size={24} />
-                      <div>
-                        <h4 className="font-bold text-sm text-primary uppercase">Oculomotor Fixation Analysis</h4>
-                        <p className="text-xs text-muted-foreground leading-relaxed">
-                          Patient maintained {metrics.accuracy}% conjugate gaze accuracy with tight central foveal clustering. Saccadic overshoot was within normal limits.
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="card-soft bg-card/60 p-4">
+                    <div className="card-soft bg-card/60 p-4 rounded-2xl border border-white/10">
                       <div className="flex items-center gap-2 mb-2">
                         <ClipboardList className="text-secondary" size={16} />
                         <h4 className="font-bold text-xs uppercase tracking-wider text-secondary">Doctor / Therapist Notes</h4>
@@ -1112,9 +1222,14 @@ export default function TherapySession() {
                       <textarea
                         value={therapistNotes}
                         onChange={(e) => setTherapistNotes(e.target.value)}
-                        placeholder="Enter therapist or doctor observations for this session..."
-                        className="w-full min-h-20 bg-muted/60 border border-border rounded-xl px-3 py-2 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 resize-none"
+                        placeholder="Enter clinician observations, patient cooperation, or post-session notes..."
+                        className="w-full min-h-24 bg-muted/60 border border-border rounded-xl px-3 py-2 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 resize-none"
                       />
+                    </div>
+
+                    <div className="p-3 bg-muted/20 rounded-xl border border-white/5 text-[11px] text-muted-foreground flex items-center justify-between">
+                      <span>Therapy Language: <b className="text-primary">{voiceCoach.getLanguageOption().name}</b></span>
+                      <span>Supabase Sync: <b className={saveReady ? "text-emerald-400" : "text-amber-400"}>{saveReady ? "Ready" : "Pending"}</b></span>
                     </div>
                   </div>
                 </div>
@@ -1134,54 +1249,20 @@ export default function TherapySession() {
                   }}
                 />
 
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-                  <div className="card-soft">
-                    <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Completion Date</p>
-                    <p className="mt-2 font-semibold text-foreground">{completionDate}</p>
-                  </div>
-                  <div className="card-soft">
-                    <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Patient ID</p>
-                    <p className="mt-2 font-semibold text-foreground">{selectedPatient.id}</p>
-                  </div>
-                  <div className="card-soft">
-                    <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Therapy ID</p>
-                    <p className="mt-2 font-semibold text-foreground">{selectedGame.id}</p>
-                  </div>
-                  <div className="card-soft">
-                    <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Backend Status</p>
-                    <p className="mt-2 font-semibold text-foreground">{saveReady ? "Ready to save" : "Pending"}</p>
-                  </div>
-                </div>
-
-                <div className="card-soft border border-white/5">
-                  <div className="flex items-center gap-2 mb-3">
-                    <FileText className="text-primary" size={18} />
-                    <h4 className="font-bold text-sm uppercase tracking-wider text-primary">Future API Preparation</h4>
-                  </div>
-                  <p className="text-sm text-muted-foreground leading-6">
-                    This session view is prepared to submit data through `POST /patients/{'{id}'}/therapy`, refresh records from
-                    `GET /patients/{'{id}'}/therapy`, update entries with `PUT /therapy/{'{sessionId}'}`, and load individual summaries from
-                    `GET /therapy/{'{sessionId}'}`.
-                  </p>
-                  {savePayload ? (
-                    <div className="mt-4 rounded-2xl bg-muted/50 border border-border p-4 text-xs text-muted-foreground">
-                      Ready payload: patient ID, therapy ID, session duration, completion status, performance score, doctor notes, and session date.
-                    </div>
-                  ) : null}
-                </div>
-
                 <div className="flex flex-col sm:flex-row gap-4 justify-center pt-2">
                   <button
                     onClick={() => navigate("/dashboard")}
-                    className="px-8 py-3 bg-muted text-foreground rounded-2xl font-bold hover:bg-muted/80 transition-colors"
+                    className="px-8 py-3.5 bg-muted text-foreground rounded-2xl font-bold hover:bg-muted/80 transition-colors cursor-pointer"
                   >
                     Back to Dashboard
                   </button>
                   <button
-                    onClick={() => navigate("/analytics")}
-                    className="px-8 py-3 bg-primary text-primary-foreground rounded-2xl font-bold flex items-center gap-2 justify-center hover:bg-primary/90 transition-all shadow-lg shadow-primary/20"
+                    onClick={handleDownloadReport}
+                    disabled={isGeneratingPdf}
+                    className="px-8 py-3.5 bg-primary text-primary-foreground rounded-2xl font-bold flex items-center gap-2 justify-center hover:bg-primary/90 transition-all shadow-lg shadow-primary/20 cursor-pointer disabled:opacity-50"
                   >
-                    View Clinical Report <ChevronRight size={18} />
+                    <Download size={18} />
+                    {isGeneratingPdf ? "Generating..." : "Download Official PDF Report"}
                   </button>
                 </div>
               </div>

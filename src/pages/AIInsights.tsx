@@ -20,6 +20,7 @@ import {
   FileText,
   Loader2,
   Eye,
+  Languages,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
@@ -28,6 +29,7 @@ import { aiService, type AIInsight, type AIDiagnosisAndPlan } from "@/services/a
 import { AIAnalyticsModal } from "@/components/ai/AIAnalyticsModal";
 import { ClinicalDisclaimerBanner } from "@/components/ui/ClinicalDisclaimerBanner";
 import { ClinicalSummaryReportModal } from "@/components/reports/ClinicalSummaryReportModal";
+import { voiceCoach, SUPPORTED_LANGUAGES, type SupportedLanguage } from "@/utils/voiceCoach";
 
 export default function AIInsights() {
   const navigate = useNavigate();
@@ -40,6 +42,7 @@ export default function AIInsights() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [activePlanEdits, setActivePlanEdits] = useState<Record<string, { duration: number; speed: number }>>({});
+  const [selectedLanguage, setSelectedLanguage] = useState<SupportedLanguage>(() => voiceCoach.getLanguage());
 
   useEffect(() => {
     let isMounted = true;
@@ -117,6 +120,7 @@ export default function AIInsights() {
     const targetGameId = overrideGameId || diagnosis?.primaryExerciseId || "convergence-pushup";
     const edits = activePlanEdits[targetGameId] || { duration: 5, speed: 1.0 };
 
+    voiceCoach.setLanguage(selectedLanguage);
     navigate("/therapy-session", {
       state: {
         prescribedExerciseId: targetGameId,
@@ -124,6 +128,10 @@ export default function AIInsights() {
         prescribedDurationMinutes: edits.duration,
         mode: "mobile",
         patientId: selectedPatient?.id,
+        therapyLanguage: selectedLanguage,
+        assessmentMetrics: location.state?.assessmentMetrics,
+        cameraQuality: location.state?.cameraQuality,
+        aiDiagnosis: diagnosis,
       },
     });
   };
@@ -525,6 +533,45 @@ export default function AIInsights() {
             </div>
           </div>
 
+          {/* 8. Choose Therapy Language Selection (Requirement 8) */}
+          <div className="p-5 bg-card/90 border border-primary/30 rounded-3xl space-y-4 shadow-sm">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <h4 className="font-bold text-foreground text-sm flex items-center gap-2">
+                  <Languages className="text-primary" size={18} /> Choose Therapy Language
+                </h4>
+                <p className="text-xs text-muted-foreground">
+                  Real-time voice instructions and biofeedback will speak in your selected language.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+              {SUPPORTED_LANGUAGES.map((lang) => {
+                const isSelected = selectedLanguage === lang.code;
+                return (
+                  <button
+                    key={lang.code}
+                    type="button"
+                    onClick={() => {
+                      setSelectedLanguage(lang.code);
+                      voiceCoach.setLanguage(lang.code);
+                    }}
+                    className={`p-3 rounded-2xl border text-center transition-all cursor-pointer flex flex-col items-center justify-center gap-1 ${
+                      isSelected
+                        ? "bg-primary/15 border-primary text-primary font-bold shadow-md scale-[1.02]"
+                        : "bg-muted/40 border-border hover:border-primary/50 text-foreground"
+                    }`}
+                  >
+                    <span className="text-xl">{lang.flag}</span>
+                    <span className="text-xs font-bold">{lang.name}</span>
+                    <span className="text-[10px] text-muted-foreground">{lang.nativeName}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           {/* Clinician Approval Authorization */}
           <div className="space-y-3">
             <div className="p-5 bg-card/80 border border-primary/40 rounded-3xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm">
@@ -544,7 +591,7 @@ export default function AIInsights() {
                 onClick={() => handleStartPrescribedTherapy()}
                 className="px-8 py-3.5 bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-sm rounded-2xl shadow-lg shadow-primary/25 transition-all hover:scale-105 flex items-center justify-center gap-2 cursor-pointer shrink-0"
               >
-                <CheckCircle2 size={18} /> Approve & Launch Session
+                <CheckCircle2 size={18} /> Start Therapy →
               </button>
             </div>
             <ClinicalDisclaimerBanner variant="compact" />
