@@ -2,11 +2,11 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://foceye-backend.onrender.com/api/:path*"
+      "destination": "https://foceye1-backend-only.onrender.com/api/:path*"
     },
     {
       "source": "/ws/:path*",
-      "destination": "https://foceye-backend.onrender.com/ws/:path*"
+      "destination": "https://foceye1-backend-only.onrender.com/ws/:path*"
     },
     {
       "source": "/(.*)",

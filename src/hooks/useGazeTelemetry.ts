@@ -70,7 +70,7 @@ export function useGazeTelemetry(
       const host = clean.replace(/^https?:\/\//, "");
       return `${proto}://${host}/ws/gaze/${sessionId}`;
     }
-    return `wss://foceye-backend.onrender.com/ws/gaze/${sessionId}`;
+    return `wss://foceye1-backend-only.onrender.com/ws/gaze/${sessionId}`;
   })();
 
   // Start simulation loop (used when WS is unavailable or disconnected)

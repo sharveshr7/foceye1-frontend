@@ -7,7 +7,7 @@ export class ApiClient {
   static getBaseUrl(): string {
     const raw = (import.meta.env.VITE_API_URL || '').trim();
     if (!raw) {
-      return 'https://foceye-backend.onrender.com/api/v1';
+      return 'https://foceye1-backend-only.onrender.com/api/v1';
     }
     const clean = raw.replace(/\/+$/, '');
     return clean.endsWith('/api/v1') ? clean : `${clean}/api/v1`;
