@@ -27,6 +27,8 @@ describe("authService & ApiClient", () => {
   });
 
   it("handles offline clinician login fallback gracefully", async () => {
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("Network Error (Server Offline)"));
+
     const res = await authService.login({
       email: "dr.smith@foceye.clinic",
       password: "Password123!",

@@ -4,7 +4,7 @@ import { reportService } from "../services/report.service";
 describe("reportService", () => {
   beforeEach(() => {
     // Mock window.URL methods
-    global.window.URL.createObjectURL = vi.fn().mockReturnValue("blob:http://localhost:3000/mock-pdf");
+    global.window.URL.createObjectURL = vi.fn().mockReturnValue("blob:https://foceye.vercel.app/mock-pdf");
     global.window.URL.revokeObjectURL = vi.fn();
     global.window.print = vi.fn();
   });

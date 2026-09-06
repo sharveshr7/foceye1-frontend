@@ -7,15 +7,6 @@ export class ApiClient {
   static getBaseUrl(): string {
     const raw = (import.meta.env.VITE_API_URL || '').trim();
     if (!raw) {
-      if (typeof window !== 'undefined') {
-        const hostname = window.location.hostname;
-        if (hostname === 'localhost' || hostname === '127.0.0.1') {
-          return 'http://localhost:8000/api/v1';
-        }
-        if (hostname.includes('vercel.app')) {
-          return 'https://foceye-backend.onrender.com/api/v1';
-        }
-      }
       return 'https://foceye-backend.onrender.com/api/v1';
     }
     const clean = raw.replace(/\/+$/, '');
