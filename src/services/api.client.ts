@@ -1,6 +1,6 @@
 /**
  * Unified FOCEYE Clinical API Client
- * Connects to FastAPI Backend at http://localhost:8000/api/v1 with graceful fallback.
+ * Connects to FastAPI Backend with automatic cloud fallback and JWT token management.
  */
 
 export class ApiClient {
@@ -12,12 +12,16 @@ export class ApiClient {
         if (hostname === 'localhost' || hostname === '127.0.0.1') {
           return 'http://localhost:8000/api/v1';
         }
+        if (hostname.includes('vercel.app')) {
+          return 'https://foceye-backend.onrender.com/api/v1';
+        }
       }
-      return '/api/v1';
+      return 'https://foceye-backend.onrender.com/api/v1';
     }
     const clean = raw.replace(/\/+$/, '');
     return clean.endsWith('/api/v1') ? clean : `${clean}/api/v1`;
   }
+
   private static token: string | null =
     localStorage.getItem('foceye_auth_token') || localStorage.getItem('foceye_token');
 
@@ -106,7 +110,7 @@ export class ApiClient {
   }
 
   static async downloadBlob(endpoint: string, body?: any): Promise<Blob> {
-    const url = `${API_BASE_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
+    const url = `${this.getBaseUrl()}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     };

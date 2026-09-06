@@ -63,8 +63,8 @@ export default function AIInsights() {
         } else {
           // 2. Automatically generate patient-specific clinical diagnosis
           const defaultMetrics = {
-            patientName: selectedPatient ? `${selectedPatient.firstName} ${selectedPatient.lastName}` : "Alex Rivera",
-            age: selectedPatient?.age || 9,
+            patientName: selectedPatient ? `${selectedPatient.firstName} ${selectedPatient.lastName}` : "Clinical Patient Evaluation",
+            age: selectedPatient?.age || 11,
             calibrationPrecision: 98,
             acuityScore: 85,
             contrastScore: 90,

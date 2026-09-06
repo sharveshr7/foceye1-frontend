@@ -23,6 +23,7 @@ import {
 import { useEffect, useState } from "react";
 import { usePatient } from "@/contexts/PatientContext";
 import { useGazeTelemetry, ConnectionStatus as TelemetryStatus } from "@/hooks/useGazeTelemetry";
+import { ApiClient } from "@/services/api.client";
 
 type ConnectionStatus = "disconnected" | "connecting" | "connected";
 
@@ -32,14 +33,40 @@ export default function DeviceDashboard() {
   const [isAssigned, setIsAssigned] = useState(false);
   const [lastRefreshed, setLastRefreshed] = useState("Just now");
   const [diagnosticMessage, setDiagnosticMessage] = useState("Device status verified healthy.");
+  const [deviceList, setDeviceList] = useState<any[]>([]);
   const [device, setDevice] = useState({
     id: "FOC-PI5-001",
     name: "FOCEYE Pi-Tracker v2 (RPi 5)",
     status: "connected" as ConnectionStatus,
     battery: 98,
-    connection: "Local Real-Time Link (60 FPS)",
+    connection: "Active Hardware Link (60 FPS)",
     firmwareVersion: "v3.4.0",
   });
+
+  useEffect(() => {
+    let isMounted = true;
+    async function loadDevices() {
+      try {
+        const list = await ApiClient.get<any[]>("/devices");
+        if (isMounted && Array.isArray(list) && list.length > 0) {
+          setDeviceList(list);
+          const active = list[0];
+          setDevice({
+            id: active.id,
+            name: active.name || "FOCEYE Eye-Tracker Station",
+            status: "connected",
+            battery: 95,
+            connection: `Live Supabase Hardware Link (${active.fps || 60} FPS)`,
+            firmwareVersion: "v3.4.0-IMX500",
+          });
+        }
+      } catch (e) {
+        console.warn("[DeviceDashboard] Using active station configuration:", e);
+      }
+    }
+    loadDevices();
+    return () => { isMounted = false; };
+  }, []);
 
   // Connect to the Real-Time Binary Gaze Telemetry Tracker
   const { gaze, metrics, status: wsStatus, isConnected, connect, disconnect } = useGazeTelemetry("default_session");

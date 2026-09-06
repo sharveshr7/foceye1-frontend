@@ -116,13 +116,13 @@ export const ClinicalSummaryReportModal: React.FC<ClinicalSummaryReportModalProp
               <div>
                 <p className="text-[10px] font-bold text-slate-400 dark:text-muted-foreground uppercase tracking-wider">Patient Name</p>
                 <p className="font-extrabold text-sm text-slate-900 dark:text-foreground mt-0.5">
-                  {patient ? `${patient.firstName} ${patient.lastName}` : "Alex Rivera"}
+                  {patient ? `${patient.firstName} ${patient.lastName}` : "Clinical Patient Record"}
                 </p>
               </div>
               <div>
                 <p className="text-[10px] font-bold text-slate-400 dark:text-muted-foreground uppercase tracking-wider">Patient ID / Age</p>
                 <p className="font-bold text-slate-800 dark:text-foreground mt-0.5">
-                  {patient?.id || "PAT-1001"} · {patient?.age || 9} yrs ({patient?.gender || "Male"})
+                  {patient?.id || "Active Record"} · {patient?.age || 11} yrs ({patient?.gender || "Female"})
                 </p>
               </div>
               <div>

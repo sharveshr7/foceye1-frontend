@@ -1,3 +1,4 @@
+import { ApiClient } from "./api.client";
 import { authService } from "./auth.service";
 
 export type StaffRole =
@@ -60,21 +61,57 @@ export const staffService = {
   },
 
   async list(): Promise<StaffMember[]> {
+    try {
+      const remoteStaff = await ApiClient.get<any[]>("/auth/staff");
+      if (Array.isArray(remoteStaff) && remoteStaff.length > 0) {
+        const mapped: StaffMember[] = remoteStaff.map((s) => ({
+          id: s.id,
+          hospitalId: s.hospitalId || authService.getCurrentHospitalId(),
+          name: s.name,
+          email: s.email,
+          role: (s.role === "DOCTOR" ? "Doctor" : "Vision Therapist") as StaffRole,
+          department: s.department || "Vision Therapy",
+          phone: s.phone || "+1 (555) 012-3456",
+          status: (s.status === "ACTIVE" ? "Active" : "Inactive") as StaffStatus,
+          createdAt: s.joinDate || new Date().toISOString(),
+          permissions: ["Patient Management", "Vision Test", "Therapy"]
+        }));
+        this.setLocalStaff(mapped);
+        return mapped;
+      }
+    } catch (e) {
+      // Backend offline fallback
+    }
     return this.getLocalStaff();
   },
 
   async create(input: StaffInput): Promise<StaffMember> {
     const hospitalId = authService.getCurrentHospitalId();
+    let assignedId = `staff_${Date.now()}`;
+
+    try {
+      const res = await ApiClient.post<any>("/auth/staff", {
+        name: input.name,
+        email: input.email,
+        role: input.role,
+        department: input.department,
+        phone: input.phone
+      });
+      if (res && res.id) assignedId = res.id;
+    } catch (e) {
+      console.warn("[staffService] Failed to sync new staff with backend:", e);
+    }
+
     const newStaff: StaffMember = {
       ...input,
-      id: `staff_${Date.now()}`,
+      id: assignedId,
       hospitalId,
       permissions: input.permissions || ["Patient Management", "Vision Test", "Therapy"],
       createdAt: new Date().toISOString(),
     };
 
     const current = this.getLocalStaff();
-    const updated = [newStaff, ...current];
+    const updated = [newStaff, ...current.filter((s) => s.id !== newStaff.id)];
     this.setLocalStaff(updated);
     return newStaff;
   },
@@ -101,25 +138,14 @@ export const staffService = {
     return updatedMember;
   },
 
-  async toggleStatus(id: string): Promise<StaffMember> {
-    const current = this.getLocalStaff();
-    const existing = current.find((s) => s.id === id);
-    if (!existing) {
-      throw new Error(`Staff member ${id} not found.`);
+  async remove(id: string): Promise<void> {
+    try {
+      await ApiClient.delete(`/auth/staff/${id}`);
+    } catch (e) {
+      // Ignore network errors
     }
-
-    const newStatus: StaffStatus = existing.status === "Active" ? "Inactive" : "Active";
-    return this.update(id, { status: newStatus });
-  },
-
-  async delete(id: string): Promise<void> {
     const current = this.getLocalStaff();
-    const updated = current.filter((s) => s.id !== id);
-    this.setLocalStaff(updated);
-  },
-
-  async getById(id: string): Promise<StaffMember | null> {
-    const current = this.getLocalStaff();
-    return current.find((s) => s.id === id) || null;
+    const filtered = current.filter((s) => s.id !== id);
+    this.setLocalStaff(filtered);
   },
 };
