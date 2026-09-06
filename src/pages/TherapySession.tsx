@@ -24,6 +24,7 @@ import {
   VideoOff,
   Sparkles,
   Eye,
+  Languages,
 } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
@@ -37,7 +38,7 @@ import { PediatricRewardsModal } from "@/components/therapy/PediatricRewardsModa
 import type { EyeTrackingFrame } from "@/utils/eyeTracker";
 import { useGazeTelemetry } from "@/hooks/useGazeTelemetry";
 import { calibrationService } from "@/services/calibration.service";
-import { voiceCoach } from "@/utils/voiceCoach";
+import { voiceCoach, SUPPORTED_LANGUAGES, type SupportedLanguage } from "@/utils/voiceCoach";
 
 type SessionStep = "exercise-selection" | "instructions" | "setup" | "active" | "summary";
 type TherapyMode = "mobile" | "device";
@@ -85,6 +86,7 @@ export default function TherapySession() {
   const latestCalib = calibrationService.getLatestCalibration(selectedPatient?.id);
 
   const mode: TherapyMode = location.state?.mode || "mobile";
+  const [therapyLanguage, setTherapyLanguage] = useState<SupportedLanguage>(() => voiceCoach.getLanguage());
   const [step, setStep] = useState<SessionStep>(location.state?.prescribedExerciseId ? "instructions" : "exercise-selection");
   const [selectedGame, setSelectedGame] = useState<TherapyExercise>(() => {
     if (location.state?.prescribedExerciseId) {
@@ -106,8 +108,12 @@ export default function TherapySession() {
   const [sessionNumber, setSessionNumber] = useState(1);
   const [therapyStatus, setTherapyStatus] = useState<TherapyStatus>("Not Started");
   const [gazeFrame, setGazeFrame] = useState<EyeTrackingFrame | null>(null);
-  // Live Hardware Eye Telemetry Stream
-  const { gaze: hardwareGaze, metrics: hwMetrics, isConnected: isHardwareConnected } = useGazeTelemetry("default_session");
+  // Live Hardware Eye Telemetry Stream (only run simulation fallback when mode is device)
+  const { gaze: hardwareGaze, metrics: hwMetrics, isConnected: isHardwareConnected } = useGazeTelemetry(
+    "default_session",
+    undefined,
+    mode === "device"
+  );
 
   useEffect(() => {
     if (isHardwareConnected && hardwareGaze) {
@@ -258,16 +264,21 @@ export default function TherapySession() {
     window.setTimeout(() => setPermission("granted"), 1500);
   };
 
+  const handleLanguageChange = (lang: SupportedLanguage) => {
+    setTherapyLanguage(lang);
+    voiceCoach.setLanguage(lang);
+  };
+
   const pauseSession = () => {
     setIsPlaying(false);
     setTherapyStatus("Paused");
-    voiceCoach.speak("Session paused.");
+    voiceCoach.sessionPaused();
   };
 
   const resumeSession = () => {
     setIsPlaying(true);
     setTherapyStatus("In Progress");
-    voiceCoach.speak("Session resumed. Follow the target.");
+    voiceCoach.sessionResumed();
   };
 
   const endSession = () => {
@@ -276,7 +287,7 @@ export default function TherapySession() {
     setSessionDate(new Date());
     setSaveReady(true);
     setStep("summary");
-    voiceCoach.speak("Session complete. Excellent work!");
+    voiceCoach.sessionComplete();
   };
 
   const saveSession = async () => {
@@ -288,6 +299,7 @@ export default function TherapySession() {
         blinks: metrics.blinks,
         duration: selectedGame.duration - timeLeft,
         mode,
+        language: therapyLanguage,
         patientId: selectedPatient?.id,
         timestamp: (sessionDate ?? new Date()).toISOString(),
       });
@@ -379,6 +391,9 @@ export default function TherapySession() {
                   Calibrated: {latestCalib?.accuracy || 94}%
                 </span>
               )}
+              <span className="px-2.5 py-0.5 bg-primary/10 text-[10px] font-bold text-primary rounded-full flex items-center gap-1 uppercase">
+                <Languages size={11} /> {voiceCoach.getLanguageOption().flag} {voiceCoach.getLanguageOption().nativeName}
+              </span>
             </div>
             <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">
               {selectedPatient.firstName} {selectedPatient.lastName} · {selectedPatient.id} ·{" "}
@@ -793,16 +808,56 @@ export default function TherapySession() {
                     </div>
                   </div>
 
+                  {/* Multi-Language Voice Therapy Selector */}
+                  <div className="p-4 bg-card/60 rounded-2xl border border-white/10 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Languages className="text-primary" size={16} />
+                        <span className="font-bold text-xs uppercase tracking-wider text-foreground">
+                          Therapy Voice Language
+                        </span>
+                      </div>
+                      <span className="text-[10px] bg-primary/10 text-primary border border-primary/20 px-2 py-0.5 rounded-full font-bold uppercase flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-primary animate-ping" />
+                        Voice Guidance: ON
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      {SUPPORTED_LANGUAGES.map((lang) => {
+                        const isSelected = therapyLanguage === lang.code;
+                        return (
+                          <button
+                            key={lang.code}
+                            type="button"
+                            onClick={() => handleLanguageChange(lang.code)}
+                            className={`px-3 py-2 rounded-xl text-xs font-bold flex items-center justify-between border transition-all cursor-pointer ${
+                              isSelected
+                                ? "bg-primary/20 border-primary text-primary shadow-sm"
+                                : "bg-muted/40 border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted"
+                            }`}
+                          >
+                            <span>{lang.flag} {lang.nativeName}</span>
+                            {isSelected && <CheckCircle2 size={13} className="text-primary shrink-0 ml-1" />}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <p className="text-[11px] text-muted-foreground">
+                      Spoken directions will be delivered in <span className="font-semibold text-primary">{voiceCoach.getLanguageOption().name} ({voiceCoach.getLanguageOption().nativeName})</span>.
+                    </p>
+                  </div>
+
                   <div className="flex flex-col sm:flex-row gap-3 pt-2">
                     <button
                       onClick={startSession}
-                      className="flex-1 py-4 bg-primary text-primary-foreground rounded-2xl font-bold text-base shadow-xl shadow-primary/20 flex items-center justify-center gap-2 hover:scale-[1.02] transition-transform"
+                      className="flex-1 py-4 bg-primary text-primary-foreground rounded-2xl font-bold text-base shadow-xl shadow-primary/20 flex items-center justify-center gap-2 hover:scale-[1.02] transition-transform cursor-pointer"
                     >
-                      <Sparkles size={18} /> Confirm & Start Session
+                      <Play size={18} fill="currentColor" /> Start Therapy ({voiceCoach.getLanguageOption().nativeName})
                     </button>
                     <button
                       onClick={() => setStep("instructions")}
-                      className="px-6 py-4 bg-muted hover:bg-muted/80 rounded-2xl font-bold text-sm text-muted-foreground hover:text-foreground transition-colors"
+                      className="px-6 py-4 bg-muted hover:bg-muted/80 rounded-2xl font-bold text-sm text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
                     >
                       Back
                     </button>
@@ -863,8 +918,8 @@ export default function TherapySession() {
                 )}
               </AnimatePresence>
 
-              <div className="flex-1 relative flex items-center justify-center p-6 overflow-hidden">
-                <div className="w-full h-full max-w-6xl max-h-[640px] relative rounded-3xl overflow-hidden shadow-2xl border border-white/10">
+              <div className="flex-1 relative flex items-center justify-center p-3 sm:p-6 overflow-hidden">
+                <div className="w-full h-full max-w-6xl max-h-[640px] relative rounded-2xl sm:rounded-3xl overflow-hidden shadow-2xl border border-white/10">
                   <TherapyCanvas
                     exercise={selectedGame}
                     isPlaying={isPlaying && countdown === null}
@@ -878,20 +933,20 @@ export default function TherapySession() {
 
                   {/* Paused Overlay */}
                   {!isPlaying && countdown === null && (
-                    <div className="absolute inset-0 bg-background/80 backdrop-blur-md z-30 flex flex-col items-center justify-center text-center p-8 space-y-6">
-                      <div className="w-16 h-16 rounded-3xl bg-primary/10 text-primary flex items-center justify-center">
-                        <Pause size={32} />
+                    <div className="absolute inset-0 bg-background/80 backdrop-blur-md z-30 flex flex-col items-center justify-center text-center p-6 sm:p-8 space-y-4 sm:space-y-6">
+                      <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl sm:rounded-3xl bg-primary/10 text-primary flex items-center justify-center">
+                        <Pause size={28} />
                       </div>
                       <div className="space-y-1">
-                        <h2 className="text-3xl font-bold text-foreground">Session Paused</h2>
-                        <p className="text-muted-foreground text-sm">Review patient comfort before resuming therapy.</p>
+                        <h2 className="text-2xl sm:text-3xl font-bold text-foreground">Session Paused</h2>
+                        <p className="text-muted-foreground text-xs sm:text-sm">Review patient comfort before resuming therapy.</p>
                       </div>
-                      <div className="flex gap-4 justify-center flex-wrap">
+                      <div className="flex gap-3 sm:gap-4 justify-center flex-wrap">
                         <button
                           onClick={resumeSession}
-                          className="px-8 py-3.5 bg-primary text-primary-foreground rounded-2xl font-bold shadow-xl shadow-primary/20 hover:scale-105 transition-transform flex items-center gap-2"
+                          className="px-6 sm:px-8 py-3 sm:py-3.5 bg-primary text-primary-foreground rounded-xl sm:rounded-2xl font-bold shadow-xl shadow-primary/20 hover:scale-105 transition-transform flex items-center gap-2 text-sm"
                         >
-                          <Play size={18} fill="currentColor" /> Resume Session
+                          <Play size={16} fill="currentColor" /> Resume Session
                         </button>
                         <button
                           onClick={() => {
@@ -899,7 +954,7 @@ export default function TherapySession() {
                             setCountdown(3);
                             setTherapyStatus("In Progress");
                           }}
-                          className="px-8 py-3.5 bg-muted text-foreground rounded-2xl font-bold hover:bg-muted/80 transition-colors"
+                          className="px-6 sm:px-8 py-3 sm:py-3.5 bg-muted text-foreground rounded-xl sm:rounded-2xl font-bold hover:bg-muted/80 transition-colors text-sm"
                         >
                           Restart Session
                         </button>
@@ -910,21 +965,21 @@ export default function TherapySession() {
 
                 {/* Floating PIP Camera Preview for Mobile/Camera Mode */}
                 {mode === "mobile" && countdown === null && (
-                  <div className="absolute bottom-6 right-6 z-30 flex flex-col items-end">
-                    <div className="bg-black/80 backdrop-blur-md px-3 py-1.5 rounded-t-2xl border-t border-x border-white/10 flex items-center gap-3 text-xs font-bold text-white shadow-xl">
-                      <span className="flex items-center gap-1.5 text-primary text-[11px]">
-                        <Eye size={13} /> Live Camera Feed
+                  <div className="absolute bottom-3 right-3 sm:bottom-6 sm:right-6 z-30 flex flex-col items-end">
+                    <div className="bg-black/80 backdrop-blur-md px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-t-xl sm:rounded-t-2xl border-t border-x border-white/10 flex items-center gap-2 sm:gap-3 text-[10px] sm:text-xs font-bold text-white shadow-xl">
+                      <span className="flex items-center gap-1 sm:gap-1.5 text-primary text-[10px] sm:text-[11px]">
+                        <Eye size={12} /> Live Camera
                       </span>
                       <button
                         onClick={() => setShowPipCamera((prev) => !prev)}
                         className="text-white/70 hover:text-white transition-colors"
                         title={showPipCamera ? "Hide Camera" : "Show Camera"}
                       >
-                        {showPipCamera ? <VideoOff size={14} /> : <Video size={14} />}
+                        {showPipCamera ? <VideoOff size={13} /> : <Video size={13} />}
                       </button>
                     </div>
                     {showPipCamera && (
-                      <div className="w-56 h-36 rounded-b-2xl rounded-tl-2xl overflow-hidden border border-white/10 shadow-2xl">
+                      <div className="w-36 h-24 sm:w-56 sm:h-36 rounded-b-xl rounded-tl-xl sm:rounded-b-2xl sm:rounded-tl-2xl overflow-hidden border border-white/10 shadow-2xl">
                         <CameraFeed
                           autoStart={true}
                           compact={true}

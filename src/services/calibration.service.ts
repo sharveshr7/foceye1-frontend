@@ -26,6 +26,8 @@ export interface CalibrationRecord {
   patient_id?: string;
   notes?: string;
   precision_score: number;
+  accuracy?: number;
+  accuracyPct?: number;
   status: "Successful" | "Insufficient Accuracy" | string;
   timestamp: string;
 }
@@ -99,6 +101,8 @@ export const calibrationService = {
     const record: CalibrationRecord = {
       ...data,
       precision_score: precision,
+      accuracy: precision,
+      accuracyPct: precision,
       status: resultStatus,
       timestamp: new Date().toISOString(),
     };
@@ -113,6 +117,8 @@ export const calibrationService = {
         JSON.stringify({
           status: isPassing ? "Calibrated" : "Insufficient Accuracy",
           precision_score: precision,
+          accuracy: precision,
+          accuracyPct: precision,
           camera_status: isPassing ? "Camera aligned and calibrated" : "Recalibration required",
           last_calibration_date: new Date().toISOString().split("T")[0],
         })
@@ -128,10 +134,15 @@ export const calibrationService = {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       const list: CalibrationRecord[] = raw ? JSON.parse(raw) : [];
+      const withAccuracy = list.map((r) => ({
+        ...r,
+        accuracy: r.accuracy ?? r.precision_score ?? r.score,
+        accuracyPct: r.accuracyPct ?? r.precision_score ?? r.score,
+      }));
       if (patientId) {
-        return list.filter((item) => item.patient_id === patientId);
+        return withAccuracy.filter((item) => item.patient_id === patientId);
       }
-      return list;
+      return withAccuracy;
     } catch {
       return [];
     }
@@ -142,11 +153,15 @@ export const calibrationService = {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return null;
       const list: CalibrationRecord[] = JSON.parse(raw);
-      if (patientId) {
-        const matching = list.find((item) => item.patient_id === patientId);
-        return matching || null;
+      const matching = patientId ? list.find((item) => item.patient_id === patientId) : list[0];
+      if (matching) {
+        return {
+          ...matching,
+          accuracy: matching.accuracy ?? matching.precision_score ?? matching.score,
+          accuracyPct: matching.accuracyPct ?? matching.precision_score ?? matching.score,
+        };
       }
-      return list[0] || null;
+      return null;
     } catch {
       return null;
     }

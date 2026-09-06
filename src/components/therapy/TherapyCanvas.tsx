@@ -27,7 +27,13 @@ export interface TherapyCanvasProps {
   gazeFrame?: EyeTrackingFrame | null;
   pediatricMode?: boolean;
   pediatricTheme?: "space" | "safari" | "ocean" | "magic";
-  onMetricUpdate?: (metrics: { accuracy: number; blinks: number; confidence: number; hits: number }) => void;
+  onMetricUpdate?: (metrics: {
+    accuracy: number;
+    blinks: number;
+    confidence: number;
+    hits: number;
+    saccadicLatencyMs?: number;
+  }) => void;
   onGazePoint?: (pt: { x: number; y: number }) => void;
 }
 
@@ -65,18 +71,22 @@ export const TherapyCanvas: React.FC<TherapyCanvasProps> = ({
   const targetPosRef = useRef<{ x: number; y: number }>({ x: 0.5, y: 0.5 });
   const lastBlinkStateRef = useRef<boolean>(false);
   const lastChimeTimeRef = useRef<number>(0);
+  const lastUiUpdateTimeRef = useRef<number>(0);
+  const lastMetricUpdateTimeRef = useRef<number>(0);
+  const lastGazePointTimeRef = useRef<number>(0);
+  const gazeLockScoreRef = useRef<number>(85);
+  const fixationHoldProgressRef = useRef<number>(0);
+  const isGazeLockedRef = useRef<boolean>(false);
 
   // Initial Voice Cue on session launch
   useEffect(() => {
     if (isPlaying && exercise) {
       if (exercise.id === "blink-master") {
-        voiceCoach.speak("Blink your eyes completely on each cue.");
+        voiceCoach.blinkEyes();
       } else if (exercise.id === "focus-hold") {
-        voiceCoach.speak("Look straight ahead and keep your head still.");
-      } else if (exercise.id === "reaction-speed" || exercise.id === "saccade-jumps") {
-        voiceCoach.speak("Look at the target as quickly as possible.");
+        voiceCoach.lookCenter();
       } else {
-        voiceCoach.speak("Follow the moving target.");
+        voiceCoach.sessionStart();
       }
     }
   }, [isPlaying, exercise.id]);
@@ -156,9 +166,11 @@ export const TherapyCanvas: React.FC<TherapyCanvasProps> = ({
   // 2. Continuous Real-Time Eye & Gaze Tracking Integration Loop
   useEffect(() => {
     if (!isPlaying || !gazeFrame || !containerRef.current) return;
+    const nowTime = performance.now();
 
-    // Accumulate gaze points for 2D heatmap
-    if (onGazePoint) {
+    // Accumulate gaze points for 2D heatmap (throttled to ~10Hz to prevent array churn)
+    if (onGazePoint && nowTime - lastGazePointTimeRef.current >= 100) {
+      lastGazePointTimeRef.current = nowTime;
       onGazePoint({ x: gazeFrame.gazeX, y: gazeFrame.gazeY });
     }
 
@@ -171,11 +183,10 @@ export const TherapyCanvas: React.FC<TherapyCanvasProps> = ({
     let targetPixelY = rect.height * 0.5;
 
     if (exercise.id === "target-tracking" || exercise.id === "circular-tracking" || exercise.id === "figure-eight") {
-      // Dynamic orbital position based on timestamp
-      const now = performance.now() / 1000;
+      const now = nowTime / 1000;
       const angle = (now * (0.8 * speed)) % (Math.PI * 2);
-      const orbitRadiusX = Math.min(180, rect.width * 0.28);
-      const orbitRadiusY = Math.min(90, rect.height * 0.20);
+      const orbitRadiusX = Math.min(160, rect.width * 0.28);
+      const orbitRadiusY = Math.min(80, rect.height * 0.20);
       targetPixelX = rect.width * 0.5 + Math.sin(angle) * orbitRadiusX;
       targetPixelY = rect.height * 0.5 + Math.cos(angle * 2) * (orbitRadiusY * 0.6);
       targetPosRef.current = { x: targetPixelX / rect.width, y: targetPixelY / rect.height };
@@ -188,58 +199,41 @@ export const TherapyCanvas: React.FC<TherapyCanvasProps> = ({
     const dx = gazePixelX - targetPixelX;
     const dy = gazePixelY - targetPixelY;
     const distance = Math.sqrt(dx * dx + dy * dy);
-    setGazeDistancePx(Math.round(distance));
-
-    // Synchronized Voice Coaching & Directional Guidance
-    const normTargetX = targetPixelX / rect.width;
-    const normTargetY = targetPixelY / rect.height;
-    const evalResult = voiceCoach.evaluateGazeAndCoach(
-      normTargetX,
-      normTargetY,
-      gazeFrame.gazeX,
-      gazeFrame.gazeY,
-      gazeFrame.confidence,
-      gazeFrame.isBlinking
-    );
-    setCoachFeedback(evalResult);
 
     // Determine lock threshold based on exercise mode
     const lockThreshold = exercise.id === "focus-hold" ? 75 : 95;
     const locked = distance < lockThreshold;
-    setIsGazeLocked(locked);
-
-    const nowTime = performance.now();
+    isGazeLockedRef.current = locked;
 
     // A. Focus Hold Fixation Charging
     if (exercise.id === "focus-hold" || exercise.id === "fusion-circles") {
       if (locked) {
-        setFixationHoldProgress((prev) => Math.min(100, prev + 1.2));
+        fixationHoldProgressRef.current = Math.min(100, fixationHoldProgressRef.current + 1.2);
         if (nowTime - lastChimeTimeRef.current > 1800) {
-          soundEffects.playStreakChime(Math.floor(fixationHoldProgress / 20));
+          soundEffects.playStreakChime(Math.floor(fixationHoldProgressRef.current / 20));
           lastChimeTimeRef.current = nowTime;
         }
       } else {
-        setFixationHoldProgress((prev) => Math.max(0, prev - 0.6));
+        fixationHoldProgressRef.current = Math.max(0, fixationHoldProgressRef.current - 0.6);
       }
     }
 
     // B. Target Tracking Lock Audio & Score
     if (exercise.id === "target-tracking" || exercise.id === "circular-tracking") {
       if (locked) {
-        setGazeLockScore((prev) => Math.min(99, prev + 0.3));
+        gazeLockScoreRef.current = Math.min(99, gazeLockScoreRef.current + 0.3);
         if (nowTime - lastChimeTimeRef.current > 2200) {
           soundEffects.playTargetCatch();
           lastChimeTimeRef.current = nowTime;
         }
       } else {
-        setGazeLockScore((prev) => Math.max(60, prev - 0.2));
+        gazeLockScoreRef.current = Math.max(60, gazeLockScoreRef.current - 0.2);
       }
     }
 
     // C. Saccade Flash Auto-Hit on Gaze Arrival
     if (flashPosition && distance < 85) {
       handleTargetHit(targetPixelX, targetPixelY);
-      // Spawn new flash position
       const x = Math.floor(15 + Math.random() * 70);
       const y = Math.floor(18 + Math.random() * 64);
       setFlashPosition({ x, y });
@@ -256,16 +250,37 @@ export const TherapyCanvas: React.FC<TherapyCanvasProps> = ({
       lastBlinkStateRef.current = false;
     }
 
-    // Calculate running average saccadic latency
-    const avgLatency =
-      latencyHistory.length > 0
-        ? Math.round(latencyHistory.reduce((a, b) => a + b, 0) / latencyHistory.length)
-        : undefined;
+    // Throttle React state updates to ~10 Hz (every 100ms) to eliminate mobile rendering lag
+    if (nowTime - lastUiUpdateTimeRef.current >= 100) {
+      lastUiUpdateTimeRef.current = nowTime;
+      setGazeDistancePx(Math.round(distance));
+      setIsGazeLocked(locked);
+      setGazeLockScore(Math.round(gazeLockScoreRef.current));
+      setFixationHoldProgress(Math.round(fixationHoldProgressRef.current));
 
-    // Send updated metrics to parent
-    if (onMetricUpdate) {
+      const normTargetX = targetPixelX / rect.width;
+      const normTargetY = targetPixelY / rect.height;
+      const evalResult = voiceCoach.evaluateGazeAndCoach(
+        normTargetX,
+        normTargetY,
+        gazeFrame.gazeX,
+        gazeFrame.gazeY,
+        gazeFrame.confidence,
+        gazeFrame.isBlinking
+      );
+      setCoachFeedback(evalResult);
+    }
+
+    // Throttle parent onMetricUpdate to at most twice a second (500ms)
+    if (onMetricUpdate && nowTime - lastMetricUpdateTimeRef.current >= 500) {
+      lastMetricUpdateTimeRef.current = nowTime;
+      const avgLatency =
+        latencyHistory.length > 0
+          ? Math.round(latencyHistory.reduce((a, b) => a + b, 0) / latencyHistory.length)
+          : undefined;
+
       onMetricUpdate({
-        accuracy: Math.round(gazeLockScore),
+        accuracy: Math.round(gazeLockScoreRef.current),
         blinks: gazeFrame.blinkRatePerMin,
         confidence: Math.round(gazeFrame.confidence * 100),
         hits,
@@ -279,8 +294,7 @@ export const TherapyCanvas: React.FC<TherapyCanvasProps> = ({
     exercise.id,
     flashPosition,
     hits,
-    gazeLockScore,
-    fixationHoldProgress,
+    latencyHistory,
     onMetricUpdate,
     onGazePoint,
     handleTargetHit,
@@ -297,56 +311,57 @@ export const TherapyCanvas: React.FC<TherapyCanvasProps> = ({
   return (
     <div
       ref={containerRef}
-      className={`relative w-full h-[460px] md:h-[540px] rounded-[2.5rem] border overflow-hidden flex items-center justify-center select-none transition-colors ${
+      className={`relative w-full h-[360px] sm:h-[460px] md:h-[540px] rounded-2xl sm:rounded-[2.5rem] border overflow-hidden flex items-center justify-center select-none transition-colors ${
         highContrast
           ? "bg-black text-white border-white/20"
           : "bg-slate-900/90 dark:bg-card/70 text-foreground border-border/80 shadow-2xl"
       }`}
     >
       {/* Top Controls & Live Gaze Precision HUD */}
-      <div className="absolute top-4 inset-x-6 z-40 flex items-center justify-between pointer-events-none">
+      <div className="absolute top-3 sm:top-4 inset-x-3 sm:inset-x-6 z-40 flex items-center justify-between gap-2 pointer-events-none">
         {/* Live Gaze Biofeedback Lock Pill */}
-        <div className="flex items-center gap-2 bg-black/75 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-white/10 text-xs font-semibold text-white shadow-xl pointer-events-auto">
+        <div className="flex items-center gap-1.5 sm:gap-2 bg-black/75 backdrop-blur-md px-2.5 sm:px-3.5 py-1 sm:py-1.5 rounded-full border border-white/10 text-[11px] sm:text-xs font-semibold text-white shadow-xl pointer-events-auto max-w-[65%] sm:max-w-none truncate">
           <span
-            className={`w-2.5 h-2.5 rounded-full transition-colors ${
+            className={`w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full shrink-0 transition-colors ${
               isGazeLocked ? "bg-emerald-400 animate-pulse shadow-[0_0_10px_rgba(52,211,153,1)]" : "bg-amber-400"
             }`}
           />
-          <span className={isGazeLocked ? "text-emerald-300 font-bold" : "text-white/80"}>
-            {isGazeLocked ? "GAZE LOCKED ON TARGET" : "TRACKING EYE MOVEMENT"}
+          <span className={`truncate ${isGazeLocked ? "text-emerald-300 font-bold" : "text-white/80"}`}>
+            <span className="hidden sm:inline">{isGazeLocked ? "GAZE LOCKED ON TARGET" : "TRACKING EYE MOVEMENT"}</span>
+            <span className="sm:hidden">{isGazeLocked ? "LOCKED" : "TRACKING"}</span>
           </span>
           <span className="text-white/30">|</span>
-          <span className="text-white/90">Acc: {Math.round(gazeLockScore)}%</span>
+          <span className="text-white/90 shrink-0">Acc: {Math.round(gazeLockScore)}%</span>
           {gazeFrame && (
             <>
-              <span className="text-white/30">|</span>
-              <span className="text-primary font-mono">{gazeFrame.leftEye.diameterMm}mm</span>
+              <span className="text-white/30 hidden sm:inline">|</span>
+              <span className="text-primary font-mono hidden sm:inline">{gazeFrame.leftEye.diameterMm}mm</span>
             </>
           )}
         </div>
 
         {/* Action icons */}
-        <div className="flex items-center gap-2 pointer-events-auto">
+        <div className="flex items-center gap-1.5 sm:gap-2 pointer-events-auto shrink-0">
           <button
             onClick={() => setSpeed((prev) => (prev >= 2 ? 0.5 : prev + 0.5))}
-            className="w-9 h-9 rounded-xl bg-black/60 hover:bg-black/80 text-white flex items-center justify-center text-xs font-bold border border-white/10 transition-colors shadow-lg"
+            className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-black/60 hover:bg-black/80 text-white flex items-center justify-center text-xs font-bold border border-white/10 transition-colors shadow-lg"
             title="Adjust target speed"
           >
             {speed}x
           </button>
           <button
             onClick={toggleMute}
-            className="w-9 h-9 rounded-xl bg-black/60 hover:bg-black/80 text-white flex items-center justify-center border border-white/10 transition-colors shadow-lg"
+            className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-black/60 hover:bg-black/80 text-white flex items-center justify-center border border-white/10 transition-colors shadow-lg"
             title={isMuted ? "Unmute Sound" : "Mute Sound"}
           >
-            {isMuted ? <VolumeX size={16} /> : <Volume2 size={16} />}
+            {isMuted ? <VolumeX size={15} /> : <Volume2 size={15} />}
           </button>
           <button
             onClick={() => setHighContrast((prev) => !prev)}
-            className="w-9 h-9 rounded-xl bg-black/60 hover:bg-black/80 text-white flex items-center justify-center border border-white/10 transition-colors shadow-lg"
+            className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-black/60 hover:bg-black/80 text-white flex items-center justify-center border border-white/10 transition-colors shadow-lg"
             title="Toggle high-contrast photophobia mode"
           >
-            {highContrast ? <SunMedium size={16} /> : <Moon size={16} />}
+            {highContrast ? <SunMedium size={15} /> : <Moon size={15} />}
           </button>
         </div>
       </div>
@@ -405,8 +420,8 @@ export const TherapyCanvas: React.FC<TherapyCanvasProps> = ({
           {isPlaying && (
             <motion.div
               animate={{
-                x: [-140, 140, -140],
-                y: [-60, 60, -60],
+                x: [-105, 105, -105],
+                y: [-42, 42, -42],
               }}
               transition={{
                 duration: 8 / speed,
@@ -664,9 +679,9 @@ export const TherapyCanvas: React.FC<TherapyCanvasProps> = ({
 
       {/* --- SYNCHRONIZED VOICE COACH & REAL-TIME BIOFEEDBACK HUD --- */}
       {isPlaying && (
-        <div className="absolute bottom-4 left-6 z-40 flex items-center gap-2 pointer-events-auto">
+        <div className="absolute bottom-3 left-3 right-3 sm:bottom-4 sm:left-6 sm:right-auto z-40 flex items-center justify-between sm:justify-start gap-2 pointer-events-auto flex-wrap sm:flex-nowrap">
           <div
-            className={`px-3.5 py-1.5 rounded-full border text-xs font-bold flex items-center gap-2 backdrop-blur-md shadow-2xl transition-all ${
+            className={`px-2.5 sm:px-3.5 py-1 sm:py-1.5 rounded-full border text-[11px] sm:text-xs font-bold flex items-center gap-1.5 sm:gap-2 backdrop-blur-md shadow-2xl transition-all max-w-[75%] sm:max-w-none truncate ${
               coachFeedback?.status === "aligned"
                 ? "bg-emerald-950/85 border-emerald-500/50 text-emerald-300 shadow-[0_0_15px_rgba(16,185,129,0.3)]"
                 : coachFeedback?.status === "correcting"
@@ -686,11 +701,12 @@ export const TherapyCanvas: React.FC<TherapyCanvasProps> = ({
                 }`}
               />
             </span>
-            <span className="uppercase tracking-wider text-[10px] text-white/50 font-semibold">
-              Voice Coach:
+            <span className="uppercase tracking-wider text-[10px] text-white/60 font-bold flex items-center gap-1">
+              <span>{voiceCoach.getLanguageOption().flag}</span>
+              <span>{voiceCoach.getLanguageOption().nativeName}:</span>
             </span>
             <span className="font-bold">
-              {coachFeedback?.instruction || "Follow the moving target."}
+              {coachFeedback?.instruction || voiceCoach.getPromptText("follow_target")}
             </span>
           </div>
 

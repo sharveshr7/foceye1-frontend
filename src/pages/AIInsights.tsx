@@ -19,6 +19,7 @@ import {
   Sliders,
   FileText,
   Loader2,
+  Eye,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
@@ -207,10 +208,29 @@ export default function AIInsights() {
                 <span className="px-3 py-1 bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 text-xs font-bold rounded-full">
                   AI Confidence: {diagnosis.confidenceScore}%
                 </span>
+                {diagnosis.dataSufficiency && (
+                  <span
+                    className={`px-3 py-1 text-xs font-bold rounded-full border ${
+                      diagnosis.dataSufficiency === "Sufficient"
+                        ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20"
+                        : diagnosis.dataSufficiency === "Marginal"
+                        ? "bg-amber-500/10 text-amber-500 border-amber-500/20"
+                        : "bg-red-500/10 text-red-500 border-red-500/20"
+                    }`}
+                  >
+                    Data Quality: {diagnosis.dataSufficiency}
+                  </span>
+                )}
               </div>
               <h2 className="text-3xl font-extrabold text-foreground tracking-tight">
                 {diagnosis.suspectedVisualProblem}
               </h2>
+              {diagnosis.confidenceQualityIndicator && (
+                <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                  <ShieldCheck size={13} className="text-primary shrink-0" />
+                  <span>{diagnosis.confidenceQualityIndicator}</span>
+                </p>
+              )}
             </div>
 
             <div className="bg-card/90 px-4 py-3 rounded-2xl border border-border shadow-sm text-right">
@@ -328,6 +348,58 @@ export default function AIInsights() {
               <div>
                 <span className="font-bold">Clinical Precautions: </span>
                 {diagnosis.precautions.join(" • ")}
+              </div>
+            </div>
+          )}
+
+          {/* Structured Clinical Breakdown: Observed Findings, Possible Concerns, Recommendations */}
+          {((diagnosis.observedFindings && diagnosis.observedFindings.length > 0) ||
+            (diagnosis.possibleConcerns && diagnosis.possibleConcerns.length > 0) ||
+            (diagnosis.recommendations && diagnosis.recommendations.length > 0)) && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* 1. Observed Findings */}
+              <div className="bg-card/70 border border-border/80 rounded-2xl p-4 space-y-2.5 shadow-sm">
+                <div className="flex items-center gap-2 text-primary font-bold text-xs uppercase tracking-wider">
+                  <Eye size={14} /> Observed Findings
+                </div>
+                <ul className="space-y-1.5 text-xs text-foreground/90">
+                  {diagnosis.observedFindings?.map((item, idx) => (
+                    <li key={idx} className="flex items-start gap-2">
+                      <span className="text-primary font-bold mt-0.5">•</span>
+                      <span className="leading-relaxed">{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              {/* 2. Possible Concerns */}
+              <div className="bg-amber-500/5 border border-amber-500/20 rounded-2xl p-4 space-y-2.5 shadow-sm">
+                <div className="flex items-center gap-2 text-amber-500 font-bold text-xs uppercase tracking-wider">
+                  <AlertTriangle size={14} /> Possible Concerns
+                </div>
+                <ul className="space-y-1.5 text-xs text-foreground/90">
+                  {diagnosis.possibleConcerns?.map((item, idx) => (
+                    <li key={idx} className="flex items-start gap-2">
+                      <span className="text-amber-500 font-bold mt-0.5">•</span>
+                      <span className="leading-relaxed">{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              {/* 3. Recommendations */}
+              <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-2xl p-4 space-y-2.5 shadow-sm">
+                <div className="flex items-center gap-2 text-emerald-500 font-bold text-xs uppercase tracking-wider">
+                  <CheckCircle2 size={14} /> Recommendations
+                </div>
+                <ul className="space-y-1.5 text-xs text-foreground/90">
+                  {diagnosis.recommendations?.map((item, idx) => (
+                    <li key={idx} className="flex items-start gap-2">
+                      <span className="text-emerald-500 font-bold mt-0.5">•</span>
+                      <span className="leading-relaxed">{item}</span>
+                    </li>
+                  ))}
+                </ul>
               </div>
             </div>
           )}

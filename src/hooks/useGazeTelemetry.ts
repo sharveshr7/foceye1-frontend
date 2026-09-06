@@ -78,23 +78,29 @@ export function useGazeTelemetry(
     if (isSimulatingRef.current) return;
     isSimulatingRef.current = true;
     let t = 0;
+    let lastSimTime = 0;
 
     const loop = () => {
       if (!isMountedRef.current || !isSimulatingRef.current) return;
-      t += 0.03;
+      const now = performance.now();
+      // Throttle simulation updates to 30 FPS to reduce CPU/GPU power consumption on mobile
+      if (now - lastSimTime >= 32) {
+        lastSimTime = now;
+        t += 0.03;
 
-      // Smooth lissajous pursuit curve with micro-saccadic jitter
-      const cx = 0.5 + Math.sin(t * 0.7) * 0.28 + (Math.random() - 0.5) * 0.015;
-      const cy = 0.5 + Math.cos(t * 0.5) * 0.22 + (Math.random() - 0.5) * 0.015;
-      const pupil = 3.8 + Math.sin(t * 0.2) * 0.15;
+        // Smooth lissajous pursuit curve with micro-saccadic jitter
+        const cx = 0.5 + Math.sin(t * 0.7) * 0.28 + (Math.random() - 0.5) * 0.015;
+        const cy = 0.5 + Math.cos(t * 0.5) * 0.22 + (Math.random() - 0.5) * 0.015;
+        const pupil = 3.8 + Math.sin(t * 0.2) * 0.15;
 
-      setGaze({
-        x: Math.max(0.05, Math.min(0.95, cx)),
-        y: Math.max(0.05, Math.min(0.95, cy)),
-        pupilLeft: Number(pupil.toFixed(2)),
-        pupilRight: Number((pupil + (Math.random() - 0.5) * 0.05).toFixed(2)),
-        confidence: 0.98,
-      });
+        setGaze({
+          x: Math.max(0.05, Math.min(0.95, cx)),
+          y: Math.max(0.05, Math.min(0.95, cy)),
+          pupilLeft: Number(pupil.toFixed(2)),
+          pupilRight: Number((pupil + (Math.random() - 0.5) * 0.05).toFixed(2)),
+          confidence: 0.98,
+        });
+      }
 
       animFrameRef.current = requestAnimationFrame(loop);
     };

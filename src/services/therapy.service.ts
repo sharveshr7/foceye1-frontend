@@ -16,6 +16,8 @@ export interface TherapySessionData {
   completionStatus?: string;
   performanceScore?: number;
   doctorNotes?: string;
+  language?: string;
+  repetitions?: number;
 }
 
 import { ApiClient } from "./api.client";
@@ -33,6 +35,8 @@ export const therapyService = {
       sessionDate: sessionData.sessionDate || new Date().toISOString().split("T")[0],
       completionStatus: sessionData.completionStatus || "Completed",
       performanceScore: sessionData.performanceScore ?? sessionData.accuracy ?? 90,
+      language: sessionData.language || "en",
+      repetitions: sessionData.repetitions || 0,
     };
 
     // 1. Sync with FastAPI Backend
@@ -46,6 +50,8 @@ export const therapyService = {
           saccadic_score: sessionData.performanceScore || 88,
           convergence_score: 90,
           clinical_notes: sessionData.doctorNotes || "Routine vision therapy session completed.",
+          language: sessionData.language || "en",
+          repetitions: sessionData.repetitions || 0,
         });
       } catch (err) {
         console.warn("[therapyService] Backend therapy sync note:", err);

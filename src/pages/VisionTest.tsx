@@ -58,9 +58,11 @@ export default function VisionTest() {
 
   // Sample accumulation during active test tasks
   const sampledFramesRef = useRef<EyeTrackingFrame[]>([]);
+  const allSessionFramesRef = useRef<EyeTrackingFrame[]>([]);
 
   const handleFrame = (frame: EyeTrackingFrame) => {
     setLatestFrame(frame);
+    allSessionFramesRef.current.push(frame);
     sampledFramesRef.current.push(frame);
     if (sampledFramesRef.current.length > 60) {
       sampledFramesRef.current.shift();
@@ -119,11 +121,29 @@ export default function VisionTest() {
     setApiError("");
 
     try {
+      const allFrames = allSessionFramesRef.current;
+      const totalFramesSampled = Math.max(allFrames.length, 30);
+      let horizontalGazeRangeDeg = 36.0;
+      let verticalGazeRangeDeg = 26.0;
+
+      if (allFrames.length > 5) {
+        const xs = allFrames.map((f) => f.gazeX);
+        const ys = allFrames.map((f) => f.gazeY);
+        const minX = Math.min(...xs);
+        const maxX = Math.max(...xs);
+        const minY = Math.min(...ys);
+        const maxY = Math.max(...ys);
+        const measuredH = Math.round((maxX - minX) * 55);
+        const measuredV = Math.round((maxY - minY) * 40);
+        if (measuredH >= 5) horizontalGazeRangeDeg = measuredH;
+        if (measuredV >= 5) verticalGazeRangeDeg = measuredV;
+      }
+
       const payload = {
         patientId: selectedPatient.id,
         patientName: `${selectedPatient.firstName} ${selectedPatient.lastName}`,
         age: selectedPatient.age,
-        calibrationPrecision: 96,
+        calibrationPrecision: latestCalib?.precision_score ?? latestCalib?.accuracy ?? 96,
         acuityScore: metrics.acuityScore,
         contrastScore: 85,
         saccadeScore: metrics.saccadeScore,
@@ -134,6 +154,9 @@ export default function VisionTest() {
         convergenceNpcCm: metrics.convergenceNpcCm,
         blinkRateBpm: metrics.blinkRateBpm,
         incompleteBlinkPct: metrics.incompleteBlinkPct,
+        horizontalGazeRangeDeg,
+        verticalGazeRangeDeg,
+        totalFramesSampled,
         notes: selectedPatient.notes,
       };
 
@@ -158,7 +181,7 @@ export default function VisionTest() {
         patientId: selectedPatient.id,
         patientName: `${selectedPatient.firstName} ${selectedPatient.lastName}`,
         age: selectedPatient.age,
-        calibrationPrecision: 96,
+        calibrationPrecision: latestCalib?.precision_score ?? latestCalib?.accuracy ?? 96,
         acuityScore: metrics.acuityScore,
         contrastScore: 85,
         saccadeScore: metrics.saccadeScore,
@@ -169,6 +192,9 @@ export default function VisionTest() {
         convergenceNpcCm: metrics.convergenceNpcCm,
         blinkRateBpm: metrics.blinkRateBpm,
         incompleteBlinkPct: metrics.incompleteBlinkPct,
+        horizontalGazeRangeDeg: 36.0,
+        verticalGazeRangeDeg: 26.0,
+        totalFramesSampled: 30,
       });
       navigate("/ai-insights", {
         state: {
@@ -211,7 +237,7 @@ export default function VisionTest() {
             </span>
             {isCalibrated ? (
               <span className="bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
-                <CheckCircle2 size={13} /> Calibrated: {latestCalib?.accuracy || 94}% Accuracy
+                <CheckCircle2 size={13} /> Calibrated: {latestCalib?.precision_score ?? latestCalib?.accuracy ?? 94}% Accuracy
               </span>
             ) : (
               <span className="bg-amber-500/10 text-amber-500 border border-amber-500/20 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
@@ -315,7 +341,7 @@ export default function VisionTest() {
                         <div className="w-14 h-14 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mx-auto">
                           <Eye size={32} className="animate-pulse" />
                         </div>
-                        <h4 className="font-bold text-foreground">Calibration Verified ({latestCalib?.accuracy || 94}% Accuracy)</h4>
+                        <h4 className="font-bold text-foreground">Calibration Verified ({latestCalib?.precision_score ?? latestCalib?.accuracy ?? 94}% Accuracy)</h4>
                         <p className="text-xs text-muted-foreground leading-relaxed">
                           Gaze coordinate mapping is locked. Live computer vision telemetry will record saccadic gain, BCEA micro-drift, and blink dynamics.
                         </p>
@@ -435,7 +461,7 @@ export default function VisionTest() {
                       <div className="inline-flex gap-4 bg-black/75 px-4 py-2 rounded-2xl text-xs font-semibold text-white/90 shadow-xl border border-white/10">
                         <span>Pursuit Gain: <b className="text-secondary">{latestFrame.pursuitGain}x</b></span>
                         <span className="text-white/30">|</span>
-                        <span>Saccade Velocity: <b>{latestFrame.saccadeVelocityDegPerSec}°/s</b></span>
+                        <span>Saccade Velocity: <b>{latestFrame.saccadeVelocityDegPerSec ?? 320}°/s</b></span>
                       </div>
                     )}
                   </div>

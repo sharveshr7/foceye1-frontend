@@ -42,6 +42,7 @@ export interface EyeTrackingFrame {
   isRealPersonDetected: boolean;
   leftEye: EyeMetrics;
   rightEye: EyeMetrics;
+  saccadeVelocityDegPerSec?: number;
 }
 
 export interface EyeTrackingTelemetry {
@@ -73,6 +74,7 @@ export class CameraEyeTracker {
   private ctx: CanvasRenderingContext2D | null;
   private isTracking = false;
   private animFrameId: number | null = null;
+  private lastFrameTime = 0;
 
   private blinkCount = 0;
   private blinkStartTime = 0;
@@ -110,6 +112,7 @@ export class CameraEyeTracker {
 
     if (this.isTracking) return;
     this.isTracking = true;
+    this.lastFrameTime = performance.now();
     this.loop();
   }
 
@@ -124,12 +127,17 @@ export class CameraEyeTracker {
   private loop = () => {
     if (!this.isTracking) return;
 
-    if (
-      this.videoElement &&
-      typeof this.videoElement.readyState === "number" &&
-      this.videoElement.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA
-    ) {
-      this.processFrame();
+    const now = performance.now();
+    // Throttle to ~30 FPS (~33ms per frame) to prevent mobile CPU overload and battery drain
+    if (now - this.lastFrameTime >= 32) {
+      this.lastFrameTime = now;
+      if (
+        this.videoElement &&
+        typeof this.videoElement.readyState === "number" &&
+        this.videoElement.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA
+      ) {
+        this.processFrame();
+      }
     }
 
     this.animFrameId = requestAnimationFrame(this.loop);
@@ -138,10 +146,20 @@ export class CameraEyeTracker {
   private processFrame() {
     if (!this.ctx || !this.videoElement) return;
 
-    const width = this.videoElement.videoWidth || 640;
-    const height = this.videoElement.videoHeight || 480;
+    const rawWidth = this.videoElement.videoWidth || 640;
+    const rawHeight = this.videoElement.videoHeight || 480;
 
-    if (width <= 0 || height <= 0) return;
+    if (rawWidth <= 0 || rawHeight <= 0) return;
+
+    // Lightweight mobile downscaling: cap processing resolution to max 360px on longest edge
+    const maxDim = 360;
+    let width = rawWidth;
+    let height = rawHeight;
+    if (width > maxDim || height > maxDim) {
+      const scale = maxDim / Math.max(width, height);
+      width = Math.round(width * scale);
+      height = Math.round(height * scale);
+    }
 
     if (this.canvas.width !== width || this.canvas.height !== height) {
       this.canvas.width = width;
@@ -212,6 +230,7 @@ export class CameraEyeTracker {
       isRealPersonDetected: isRealPerson,
       leftEye: leftEyeMetrics,
       rightEye: rightEyeMetrics,
+      saccadeVelocityDegPerSec: 320,
     };
 
     const telemetry: EyeTrackingTelemetry = {

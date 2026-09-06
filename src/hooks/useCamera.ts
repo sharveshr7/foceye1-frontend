@@ -88,18 +88,24 @@ export function useCamera(options: UseCameraOptions = {}) {
       const targetFacingMode = overrideFacingMode ?? currentFacingMode;
       const targetDeviceId = overrideDeviceId ?? activeDeviceId;
 
+      const isMobileClient =
+        typeof window !== "undefined" &&
+        (window.innerWidth < 768 || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent));
+      const targetWidth = isMobileClient ? Math.min(idealWidth, 640) : idealWidth;
+      const targetHeight = isMobileClient ? Math.min(idealHeight, 480) : idealHeight;
+
       const constraints: MediaStreamConstraints = {
         audio: false,
         video: targetDeviceId
           ? {
               deviceId: { exact: targetDeviceId },
-              width: { ideal: idealWidth },
-              height: { ideal: idealHeight },
+              width: { ideal: targetWidth },
+              height: { ideal: targetHeight },
             }
           : {
               facingMode: targetFacingMode,
-              width: { ideal: idealWidth },
-              height: { ideal: idealHeight },
+              width: { ideal: targetWidth },
+              height: { ideal: targetHeight },
             },
       };
 

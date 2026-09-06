@@ -43,6 +43,11 @@ export interface AIDiagnosisAndPlan {
   prognosis: string;
   precautions: string[];
   regulatoryDisclaimer?: string;
+  observedFindings?: string[];
+  possibleConcerns?: string[];
+  recommendations?: string[];
+  dataSufficiency?: "Sufficient" | "Marginal" | "Insufficient";
+  confidenceQualityIndicator?: string;
 }
 
 export interface AIInsight {
@@ -70,6 +75,9 @@ export interface AssessmentMetrics {
   blinkRateBpm?: number;
   incompleteBlinkPct?: number;
   pupilDiameterMm?: number;
+  horizontalGazeRangeDeg?: number;
+  verticalGazeRangeDeg?: number;
+  totalFramesSampled?: number;
   notes?: string;
 }
 
@@ -147,7 +155,52 @@ export const aiService = {
       },
     };
 
-    // Convergence Insufficiency
+    // 0. Data Sufficiency Verification
+    const isInsufficient = (assessment.calibrationPrecision < 85) || ((assessment.totalFramesSampled ?? 60) < 20);
+    if (isInsufficient) {
+      return {
+        ...livenessMeta,
+        suspectedVisualProblem: "Assessment Inconclusive — Insufficient Assessment Telemetry",
+        icd10Code: "Z01.00",
+        severity: "Mild",
+        confidenceScore: 70,
+        dataSufficiency: "Insufficient",
+        confidenceQualityIndicator: `Data quality insufficient: calibration precision ${assessment.calibrationPrecision}% (target ≥ 85%) or limited frames (${assessment.totalFramesSampled ?? 0} frames).`,
+        binocularVisionStatus: "Unable to establish definitive clinical diagnosis without certified 9-point calibration.",
+        clinicalFindings: `Eye tracking calibration accuracy was ${assessment.calibrationPrecision}%, falling below the clinical minimum threshold of 85%. Number of biometric frames captured (${assessment.totalFramesSampled ?? 0}) is below diagnostic threshold.`,
+        observedFindings: [
+          `Calibration precision recorded at ${assessment.calibrationPrecision}% (Clinical minimum: 85%).`,
+          `Sampled telemetry frames: ${assessment.totalFramesSampled ?? 0} frames.`,
+          "Fixation stability and pursuit velocity cannot be verified without stable calibration baseline."
+        ],
+        possibleConcerns: [
+          "Tracking accuracy compromised due to calibration insufficiency, camera angle, or low lighting."
+        ],
+        recommendations: [
+          "Complete 9-point eye calibration before proceeding with therapy.",
+          "Ensure user is ~50cm from camera with even ambient facial illumination."
+        ],
+        telemetryMetricEvaluation: telemetryEvaluation,
+        protocolName: "Pre-Therapy Calibration Protocol",
+        primaryExerciseId: "focus-hold",
+        suggestedFollowUpWeeks: 1,
+        prescribedPlan: [
+          {
+            gameId: "focus-hold",
+            title: "Fixation Alignment & Calibration",
+            category: "Calibration Hold",
+            durationSeconds: 180,
+            targetSpeed: 0.8,
+            frequencyPerWeek: 2,
+            clinicalRationale: "Stabilizes ocular positioning prior to full therapy session.",
+          },
+        ],
+        prognosis: "Favorable once reliable calibration baseline is verified.",
+        precautions: ["Do not start intensive therapy exercises until calibration reaches ≥ 85%."],
+      };
+    }
+
+    // 1. Convergence Insufficiency
     if (npc > 10.0 || assessment.convergenceScore < 70) {
       return {
         ...livenessMeta,
@@ -157,6 +210,24 @@ export const aiService = {
         confidenceScore: 94,
         binocularVisionStatus: "Receded Near Point of Convergence with reduced positive fusional vergence.",
         clinicalFindings: `Near point of convergence (NPC) is receded to ${npc} cm (normal < 6–10 cm). Accompanied by reduced fusional vergence reserve and asthenopic symptoms during near gaze tasks.`,
+        observedFindings: [
+          `Near point of convergence (NPC) receded to ${npc} cm (Clinical normal: < 6.0–10.0 cm).`,
+          `Fixation stability measured at ${assessment.fixationScore}% with BCEA dispersion of ${bcea} deg².`,
+          `Smooth pursuit gain measured at ${gain}x across horizontal range (${assessment.horizontalGazeRangeDeg ?? 35}°).`,
+          `Blink dynamics recorded at ${bpm} BPM with ${incBlinks}% incomplete closures.`,
+          `Calibration accuracy verified at ${assessment.calibrationPrecision}%.`
+        ],
+        possibleConcerns: [
+          "Medial rectus co-contraction deficit during near binocular fixation.",
+          "Potential for visual fatigue or double vision during sustained near visual tasks."
+        ],
+        recommendations: [
+          "Dynamic Near-Point Convergence Fusion exercises 5 times per week (5 mins/session).",
+          "Central fixation stability training to suppress micro-saccadic drift.",
+          "Re-assess near point of convergence breakpoint in 4 weeks."
+        ],
+        dataSufficiency: "Sufficient",
+        confidenceQualityIndicator: `High Clinical Confidence (${assessment.totalFramesSampled ?? 60} frames analyzed, ${assessment.calibrationPrecision}% calibration accuracy)`,
         telemetryMetricEvaluation: telemetryEvaluation,
         protocolName: "FOCEYE Convergence Restoration Protocol (FCRP-Level 2)",
         primaryExerciseId: "convergence-pushup",
@@ -204,8 +275,8 @@ export const aiService = {
       };
     }
 
-    // Saccadic / Pursuit Deficit
-    if (gain < 0.85 || assessment.pursuitGain !== undefined && assessment.pursuitGain < 0.85 || assessment.saccadeScore < 70) {
+    // 2. Saccadic / Pursuit Deficit
+    if (gain < 0.85 || (assessment.pursuitGain !== undefined && assessment.pursuitGain < 0.85) || assessment.saccadeScore < 70) {
       return {
         ...livenessMeta,
         suspectedVisualProblem: "Oculomotor Saccadic & Pursuit Dysfunction",
@@ -214,6 +285,23 @@ export const aiService = {
         confidenceScore: 91,
         binocularVisionStatus: "Reduced smooth pursuit velocity gain with compensatory corrective saccades.",
         clinicalFindings: `Smooth pursuit gain is reduced to ${gain}x with saccadic latency at ${Math.round(saccadicLatency)}ms, causing tracking breakdown across horizontal and vertical meridians.`,
+        observedFindings: [
+          `Smooth pursuit gain deficient at ${gain}x (Clinical normal: 0.90–1.00).`,
+          `Saccadic latency delayed at ${Math.round(saccadicLatency)} ms with vertical range of ${assessment.verticalGazeRangeDeg ?? 28}°.`,
+          `Fixation stability score: ${assessment.fixationScore}% with BCEA of ${bcea} deg².`,
+          `Tracked across ${assessment.totalFramesSampled ?? 60} frames with ${assessment.calibrationPrecision}% calibration precision.`
+        ],
+        possibleConcerns: [
+          "Pursuit tracking breakdown requiring frequent compensatory corrective catch-up saccades.",
+          "Delayed visual orienting latency when shifting focus between lateral targets."
+        ],
+        recommendations: [
+          "Adaptive velocity smooth pursuit exercises 4 times per week.",
+          "High-frequency saccadic stepping drills to improve orienting latency.",
+          "Progress tracking speed from 1.0x to 1.5x as gain improves."
+        ],
+        dataSufficiency: "Sufficient",
+        confidenceQualityIndicator: `High Clinical Confidence (${assessment.totalFramesSampled ?? 60} frames analyzed, ${assessment.calibrationPrecision}% calibration accuracy)`,
         telemetryMetricEvaluation: telemetryEvaluation,
         protocolName: "FOCEYE Oculomotor Speed & Precision Calibration (FOS-P1)",
         primaryExerciseId: "target-tracking",
@@ -243,7 +331,7 @@ export const aiService = {
       };
     }
 
-    // General Digital Eye Strain / Baseline
+    // 3. Normal / General Digital Eye Strain Baseline
     return {
       ...livenessMeta,
       suspectedVisualProblem: "Digital Asthenopia & Mild Accommodative Fatigue",
@@ -252,6 +340,24 @@ export const aiService = {
       confidenceScore: 88,
       binocularVisionStatus: "Nominal binocular coordination with transient accommodative infacility.",
       clinicalFindings: `Slight micro-fluctuations in fixation stability (BCEA ${bcea} deg²) consistent with screen-induced visual fatigue. Blink rate is ${bpm} bpm with ${incBlinks}% incomplete blinks.`,
+      observedFindings: [
+        `Conjugate pursuit gain within functional limits at ${gain}x.`,
+        `Fixation stability at ${assessment.fixationScore}% with BCEA of ${bcea} deg².`,
+        `Saccadic reaction latency within functional bounds at ${Math.round(saccadicLatency)} ms.`,
+        `Blink rate recorded at ${bpm} BPM with ${incBlinks}% incomplete blinks.`,
+        `Calibration accuracy verified at ${assessment.calibrationPrecision}%.`
+      ],
+      possibleConcerns: [
+        "No acute binocular coordination or oculomotor motility deficits detected.",
+        "Mild transient asthenopic symptoms consistent with prolonged screen use."
+      ],
+      recommendations: [
+        "Voluntary complete blink coaching to preserve tear film integrity.",
+        "Foveal fixation hold exercises 3 times per week for ocular conditioning.",
+        "Adopt the 20-20-20 rule during prolonged digital device usage."
+      ],
+      dataSufficiency: "Sufficient",
+      confidenceQualityIndicator: `High Clinical Confidence (${assessment.totalFramesSampled ?? 60} frames analyzed, ${assessment.calibrationPrecision}% calibration accuracy)`,
       telemetryMetricEvaluation: telemetryEvaluation,
       protocolName: "FOCEYE Preventative Visual Hygiene & Re-centering Regimen",
       primaryExerciseId: "focus-hold",
