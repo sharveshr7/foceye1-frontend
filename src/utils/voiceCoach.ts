@@ -254,30 +254,49 @@ class VoiceCoachService {
     const voices = window.speechSynthesis.getVoices();
     const lang = this.currentLanguage;
 
-    // Search for voice matching language code (e.g., 'ta', 'ml', 'te', 'hi', 'en')
+    // Match voice specifically for current language code
     let matchedVoice = voices.find((v) => v.lang.toLowerCase().startsWith(lang));
 
-    // Fallback search by voice name keyword
+    // Fallback search by voice name keywords for Indian languages
     if (!matchedVoice) {
       const nameKeywords: Record<SupportedLanguage, string[]> = {
-        ta: ["tamil", "valluvar", "tam"],
-        ml: ["malayalam", "lekha", "mal"],
-        te: ["telugu", "chitra", "tel"],
-        hi: ["hindi", "kalpana", "hemant", "hin", "india"],
-        en: ["natural", "google", "samantha", "daniel", "karen"],
+        ta: ["tamil", "valluvar", "tam", "ta-in", "ta_in"],
+        ml: ["malayalam", "lekha", "mal", "ml-in", "ml_in"],
+        te: ["telugu", "chitra", "tel", "te-in", "te_in"],
+        hi: ["hindi", "kalpana", "hemant", "hin", "india", "hi-in", "hi_in"],
+        en: ["natural", "google", "samantha", "daniel", "karen", "en-us", "en-gb"],
       };
       const keywords = nameKeywords[lang] || [];
       matchedVoice = voices.find((v) =>
-        keywords.some((k) => v.name.toLowerCase().includes(k))
+        keywords.some((k) => v.name.toLowerCase().includes(k) || v.lang.toLowerCase().includes(k))
       );
     }
 
-    // Default fallback to English voice or first available
-    this.currentVoice =
-      matchedVoice ||
-      voices.find((v) => v.lang.startsWith("en")) ||
-      voices[0] ||
-      null;
+    // Only assign currentVoice if it truly matches the target language.
+    // When null for non-English languages, mobile OS uses bcp47 language routing.
+    if (matchedVoice) {
+      this.currentVoice = matchedVoice;
+    } else if (lang === "en") {
+      this.currentVoice = voices.find((v) => v.lang.toLowerCase().startsWith("en")) || voices[0] || null;
+    } else {
+      this.currentVoice = null;
+    }
+  }
+
+  /**
+   * Unlocks Web Speech API audio context during user tap/click on iOS Safari & Android Chrome
+   */
+  public unlockAudio() {
+    if (typeof window === "undefined" || !window.speechSynthesis) return;
+    try {
+      window.speechSynthesis.resume();
+      const silent = new SpeechSynthesisUtterance(" ");
+      silent.volume = 0.01;
+      silent.rate = 10;
+      window.speechSynthesis.speak(silent);
+    } catch {
+      // Ignore unlock exceptions
+    }
   }
 
   public setMuted(muted: boolean) {
@@ -304,6 +323,8 @@ class VoiceCoachService {
     this.speak(text, force, key);
   }
 
+  private activeUtterance: SpeechSynthesisUtterance | null = null;
+
   public speak(text: string, force: boolean = false, key?: VoicePromptKey) {
     if (this.isMuted || typeof window === "undefined" || !window.speechSynthesis) return;
 
@@ -318,15 +339,33 @@ class VoiceCoachService {
     }
 
     try {
-      window.speechSynthesis.cancel(); // Prevent queue buildup
+      // Resume speech synthesis to counteract Android Chrome background pause
+      window.speechSynthesis.resume();
+      window.speechSynthesis.cancel(); // Prevent queue buildup on mobile
+
       const utterance = new SpeechSynthesisUtterance(text);
-      if (this.currentVoice) utterance.voice = this.currentVoice;
+      if (this.currentVoice) {
+        utterance.voice = this.currentVoice;
+      }
 
       const langMeta = this.getLanguageOption();
       utterance.lang = langMeta.bcp47;
       utterance.rate = 0.95; // Clear clinical pace
-      utterance.pitch = 1.05;
+      utterance.pitch = 1.0;
       utterance.volume = 1.0;
+
+      // Keep active reference to avoid premature garbage collection on mobile Chrome
+      this.activeUtterance = utterance;
+      utterance.onend = () => {
+        if (this.activeUtterance === utterance) {
+          this.activeUtterance = null;
+        }
+      };
+      utterance.onerror = () => {
+        if (this.activeUtterance === utterance) {
+          this.activeUtterance = null;
+        }
+      };
 
       this.lastSpokenTime = now;
       if (key) this.lastSpokenPromptKey = key;

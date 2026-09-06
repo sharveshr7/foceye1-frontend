@@ -103,14 +103,29 @@ export function useCamera(options: UseCameraOptions = {}) {
               height: { ideal: targetHeight },
             }
           : {
-              facingMode: targetFacingMode,
+              facingMode: { ideal: targetFacingMode },
               width: { ideal: targetWidth },
               height: { ideal: targetHeight },
             },
       };
 
       try {
-        const newStream = await navigator.mediaDevices.getUserMedia(constraints);
+        let newStream: MediaStream;
+        try {
+          newStream = await navigator.mediaDevices.getUserMedia(constraints);
+        } catch (constraintErr: unknown) {
+          const cErr = constraintErr as { name?: string };
+          // Fallback if requested dimensions or facing mode are overconstrained
+          if (cErr.name === "OverconstrainedError" || cErr.name === "ConstraintNotSatisfiedError") {
+            newStream = await navigator.mediaDevices.getUserMedia({
+              audio: false,
+              video: { facingMode: targetFacingMode },
+            });
+          } else {
+            throw constraintErr;
+          }
+        }
+
         streamRef.current = newStream;
         setStream(newStream);
         setPermission("granted");

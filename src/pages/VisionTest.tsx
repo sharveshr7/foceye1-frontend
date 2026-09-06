@@ -290,6 +290,7 @@ export default function VisionTest() {
 
   const handleSendToAI = async () => {
     if (!selectedPatient) return;
+    voiceCoach.unlockAudio();
     setIsDiagnosing(true);
     setApiError("");
 
@@ -512,6 +513,7 @@ export default function VisionTest() {
 
                   <button
                     onClick={() => {
+                      voiceCoach.unlockAudio();
                       setIsCamVerified(true);
                       setStep("straight");
                     }}

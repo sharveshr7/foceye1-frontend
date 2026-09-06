@@ -315,6 +315,7 @@ export default function TherapySession() {
   };
 
   const startSession = () => {
+    voiceCoach.unlockAudio();
     setStep("active");
     setCountdown(3);
     setTherapyStatus("In Progress");
@@ -328,6 +329,7 @@ export default function TherapySession() {
   };
 
   const handleLanguageChange = (lang: SupportedLanguage) => {
+    voiceCoach.unlockAudio();
     setTherapyLanguage(lang);
     voiceCoach.setLanguage(lang);
   };

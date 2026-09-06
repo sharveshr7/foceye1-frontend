@@ -120,6 +120,7 @@ export default function AIInsights() {
     const targetGameId = overrideGameId || diagnosis?.primaryExerciseId || "convergence-pushup";
     const edits = activePlanEdits[targetGameId] || { duration: 5, speed: 1.0 };
 
+    voiceCoach.unlockAudio();
     voiceCoach.setLanguage(selectedLanguage);
     navigate("/therapy-session", {
       state: {
