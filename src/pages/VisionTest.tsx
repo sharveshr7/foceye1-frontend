@@ -25,12 +25,16 @@ import { visionService } from "@/services/vision.service";
 import { aiService } from "@/services/ai.service";
 import { CameraFeed } from "@/components/camera/CameraFeed";
 import type { EyeTrackingFrame } from "@/utils/eyeTracker";
+import { calibrationService } from "@/services/calibration.service";
 
 type TestStep = "setup" | "fixation" | "tracking" | "acuity" | "convergence" | "complete";
 
 export default function VisionTest() {
   const navigate = useNavigate();
   const { selectedPatient } = usePatient();
+
+  const isCalibrated = calibrationService.isCalibrated(selectedPatient?.id);
+  const latestCalib = calibrationService.getLatestCalibration(selectedPatient?.id);
 
   const [step, setStep] = useState<TestStep>("setup");
   const [status, setStatus] = useState("Ready for Baseline");
@@ -201,10 +205,19 @@ export default function VisionTest() {
     <div className="max-w-7xl mx-auto space-y-8 pb-12">
       <header className="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2 mb-1">
+          <div className="flex flex-wrap items-center gap-2 mb-1">
             <span className="bg-primary/10 text-primary px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">
-              Step 3 of Clinical Flow
+              Step 2: Eye Movement Assessment
             </span>
+            {isCalibrated ? (
+              <span className="bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
+                <CheckCircle2 size={13} /> Calibrated: {latestCalib?.accuracy || 94}% Accuracy
+              </span>
+            ) : (
+              <span className="bg-amber-500/10 text-amber-500 border border-amber-500/20 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
+                <AlertCircle size={13} /> Eye Calibration Required
+              </span>
+            )}
           </div>
           <h1 className="text-3xl font-bold text-foreground">Precision Vision Assessment</h1>
           <p className="text-muted-foreground">
@@ -272,27 +285,49 @@ export default function VisionTest() {
                   exit={{ opacity: 0 }}
                   className="w-full space-y-6 flex flex-col items-center"
                 >
-                  <div className="text-center space-y-2">
-                    <h3 className="text-2xl font-bold">Position Patient & Calibrate Camera</h3>
-                    <p className="text-muted-foreground text-sm max-w-md">
-                      Align patient at ~50cm from camera. The computer vision eye-tracker will sample pupil centroid displacement, EAR blink closure, and fixation stability in real-time.
-                    </p>
-                  </div>
-                  <div className="p-6 bg-card rounded-3xl border border-primary/20 shadow-md text-center max-w-md space-y-3">
-                    <div className="w-14 h-14 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mx-auto">
-                      <Eye size={32} className="animate-pulse" />
+                  {!isCalibrated ? (
+                    <div className="p-6 bg-card rounded-3xl border border-amber-500/30 shadow-lg text-center max-w-md space-y-4">
+                      <div className="w-14 h-14 rounded-2xl bg-amber-500/10 text-amber-500 flex items-center justify-center mx-auto">
+                        <AlertCircle size={32} />
+                      </div>
+                      <div className="space-y-1">
+                        <h4 className="font-bold text-foreground text-xl">Eye Calibration Required (Step 1)</h4>
+                        <p className="text-xs text-muted-foreground leading-relaxed">
+                          Clinical protocol requires 9-point eye tracking calibration before eye-movement assessment. Calibration verifies camera tracking, gaze accuracy (minimum 85%), and corneal reflection.
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => navigate("/calibration")}
+                        className="w-full py-3.5 bg-primary hover:bg-primary/90 text-primary-foreground rounded-2xl font-bold shadow-lg shadow-primary/20 hover:scale-[1.02] transition-all flex items-center justify-center gap-2 cursor-pointer"
+                      >
+                        <Play size={18} fill="currentColor" /> Complete Eye Calibration First →
+                      </button>
                     </div>
-                    <h4 className="font-bold text-foreground">Live Eye Tracking Active in Sidebar</h4>
-                    <p className="text-xs text-muted-foreground leading-relaxed">
-                      Look directly into your camera. The live telemetry box in the right panel displays your real-time corneal reflection, pupil diameter ($mm$), and blink rate ($BPM$).
-                    </p>
-                  </div>
-                  <button
-                    onClick={nextStep}
-                    className="px-8 py-3.5 bg-primary text-primary-foreground rounded-2xl font-bold shadow-lg shadow-primary/20 hover:scale-105 transition-transform flex items-center gap-2"
-                  >
-                    <Play size={18} fill="currentColor" /> Begin Biometric Assessment
-                  </button>
+                  ) : (
+                    <>
+                      <div className="text-center space-y-2">
+                        <h3 className="text-2xl font-bold">Position Patient & Calibrate Camera</h3>
+                        <p className="text-muted-foreground text-sm max-w-md">
+                          Align patient at ~50cm from camera. The computer vision eye-tracker will sample pupil centroid displacement, EAR blink closure, and fixation stability in real-time.
+                        </p>
+                      </div>
+                      <div className="p-6 bg-card rounded-3xl border border-primary/20 shadow-md text-center max-w-md space-y-3">
+                        <div className="w-14 h-14 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mx-auto">
+                          <Eye size={32} className="animate-pulse" />
+                        </div>
+                        <h4 className="font-bold text-foreground">Calibration Verified ({latestCalib?.accuracy || 94}% Accuracy)</h4>
+                        <p className="text-xs text-muted-foreground leading-relaxed">
+                          Gaze coordinate mapping is locked. Live computer vision telemetry will record saccadic gain, BCEA micro-drift, and blink dynamics.
+                        </p>
+                      </div>
+                      <button
+                        onClick={nextStep}
+                        className="px-8 py-3.5 bg-primary text-primary-foreground rounded-2xl font-bold shadow-lg shadow-primary/20 hover:scale-105 transition-transform flex items-center gap-2"
+                      >
+                        <Play size={18} fill="currentColor" /> Begin Biometric Assessment
+                      </button>
+                    </>
+                  )}
                 </motion.div>
               )}
 

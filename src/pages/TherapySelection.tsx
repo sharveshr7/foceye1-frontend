@@ -1,15 +1,23 @@
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { Smartphone, Cpu, ArrowRight, Gamepad2, Target, Zap, Activity, Eye, Sparkles, Play } from "lucide-react";
+import { Smartphone, Cpu, ArrowRight, Gamepad2, Target, Zap, Activity, Eye, Sparkles, Play, AlertCircle, CheckCircle2 } from "lucide-react";
 import { usePatient } from "@/contexts/PatientContext";
+import { calibrationService } from "@/services/calibration.service";
 
 export default function TherapySelection() {
   const navigate = useNavigate();
   const { selectedPatient } = usePatient();
 
+  const isCalibrated = calibrationService.isCalibrated(selectedPatient?.id);
+  const latestCalib = calibrationService.getLatestCalibration(selectedPatient?.id);
+
   const selectMode = (mode: "mobile" | "device", gameId?: string) => {
     if (!selectedPatient) {
       navigate("/patients");
+      return;
+    }
+    if (!isCalibrated) {
+      navigate("/calibration");
       return;
     }
     navigate("/therapy-session", {
@@ -21,7 +29,7 @@ export default function TherapySelection() {
     <div className="space-y-10 max-w-5xl mx-auto py-8 font-outfit pb-16">
       <header className="text-center space-y-2">
         <div className="inline-flex items-center gap-2 px-3 py-1 bg-primary/10 text-primary border border-primary/20 rounded-full text-xs font-bold uppercase tracking-wider">
-          <Sparkles size={13} /> Step 6: Therapy Protocol Delivery
+          <Sparkles size={13} /> Step 3: Therapy Session Delivery
         </div>
         <h1 className="text-4xl font-extrabold text-foreground tracking-tight">Choose Therapy Delivery Mode</h1>
         <p className="text-muted-foreground text-base max-w-2xl mx-auto">
@@ -30,6 +38,34 @@ export default function TherapySelection() {
             : "Select a patient to begin a supervised neuro-visual rehabilitation session."}
         </p>
       </header>
+
+      {/* Calibration Verification Banner */}
+      {selectedPatient && !isCalibrated && (
+        <div className="card-soft flex flex-col sm:flex-row items-center justify-between gap-4 p-5 bg-amber-500/10 border-amber-500/30">
+          <div className="flex items-center gap-3 text-left">
+            <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-500 flex items-center justify-center shrink-0">
+              <AlertCircle size={22} />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-foreground">Eye Calibration Required (Step 1)</p>
+              <p className="text-xs text-muted-foreground">Eye movement calibration must be completed with $\ge 85\%$ accuracy before starting therapy exercises.</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => navigate("/calibration")}
+            className="rounded-xl bg-primary px-5 py-2.5 text-xs font-bold text-primary-foreground shadow-md shadow-primary/20 hover:scale-105 transition-all shrink-0 cursor-pointer"
+          >
+            Calibrate Eyes Now →
+          </button>
+        </div>
+      )}
+
+      {selectedPatient && isCalibrated && (
+        <div className="flex items-center justify-center gap-2 text-xs font-bold text-emerald-500 bg-emerald-500/10 border border-emerald-500/20 py-2 px-4 rounded-2xl w-fit mx-auto">
+          <CheckCircle2 size={16} /> Eye Tracking Calibrated ({latestCalib?.accuracy || 94}% Accuracy) · Ready for Supervised Therapy
+        </div>
+      )}
 
       {!selectedPatient && (
         <div className="card-soft flex flex-col sm:flex-row items-center justify-between gap-4 p-5 bg-amber-500/5 border-amber-500/20">

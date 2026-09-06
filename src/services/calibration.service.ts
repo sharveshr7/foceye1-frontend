@@ -26,11 +26,12 @@ export interface CalibrationRecord {
   patient_id?: string;
   notes?: string;
   precision_score: number;
-  status: string;
+  status: "Successful" | "Insufficient Accuracy" | string;
   timestamp: string;
 }
 
 const STORAGE_KEY = "foceye_calibration_history";
+export const MIN_CALIBRATION_ACCURACY = 85;
 
 const defaultStatus: CalibrationStatus = {
   status: "Calibrated",
@@ -45,11 +46,11 @@ export const calibrationService = {
       const res = await ApiClient.get<any>("/calibration/status");
       if (res) {
         return {
-          status: "Calibrated",
+          status: (res.accuracy_percentage || 0) >= MIN_CALIBRATION_ACCURACY ? "Calibrated" : "Calibration Required",
           precision_score: res.accuracy_percentage || 96,
           camera_status: res.camera_status || "Optimal",
           last_calibration_date: res.calibrated_at ? res.calibrated_at.split("T")[0] : new Date().toISOString().split("T")[0],
-          rmse_pixels: res.rmse_pixels || 7.8
+          rmse_pixels: res.rmse_pixels || 7.8,
         };
       }
     } catch {
@@ -79,15 +80,17 @@ export const calibrationService = {
 
   submitResult: async (data: CalibrationSubmitRequest): Promise<{ precision_score: number; status: string }> => {
     const precision = data.score || 96;
+    const isPassing = precision >= MIN_CALIBRATION_ACCURACY;
+    const resultStatus = isPassing ? "Successful" : "Insufficient Accuracy";
 
     try {
       await ApiClient.post("/calibration/submit-test", {
         patient_id: data.patient_id,
         points: [
-          { x: 0.1, y: 0.1 }, { x: 0.5, y: 0.1 }, { x: 0.9, y: 0.1 },
-          { x: 0.1, y: 0.5 }, { x: 0.5, y: 0.5 }, { x: 0.9, y: 0.5 },
-          { x: 0.1, y: 0.9 }, { x: 0.5, y: 0.9 }, { x: 0.9, y: 0.9 }
-        ]
+          { x: 0.15, y: 0.15 }, { x: 0.5, y: 0.15 }, { x: 0.85, y: 0.15 },
+          { x: 0.15, y: 0.5 }, { x: 0.5, y: 0.5 }, { x: 0.85, y: 0.5 },
+          { x: 0.15, y: 0.85 }, { x: 0.5, y: 0.85 }, { x: 0.85, y: 0.85 },
+        ],
       });
     } catch (e) {
       console.warn("[calibrationService] Remote compute failed, saving locally:", e);
@@ -96,7 +99,7 @@ export const calibrationService = {
     const record: CalibrationRecord = {
       ...data,
       precision_score: precision,
-      status: "Successful",
+      status: resultStatus,
       timestamp: new Date().toISOString(),
     };
 
@@ -108,9 +111,9 @@ export const calibrationService = {
       localStorage.setItem(
         "foceye_calibration_status",
         JSON.stringify({
-          status: "Calibrated",
+          status: isPassing ? "Calibrated" : "Insufficient Accuracy",
           precision_score: precision,
-          camera_status: "Camera aligned and calibrated",
+          camera_status: isPassing ? "Camera aligned and calibrated" : "Recalibration required",
           last_calibration_date: new Date().toISOString().split("T")[0],
         })
       );
@@ -118,7 +121,7 @@ export const calibrationService = {
       console.warn("[calibrationService] Result submit error:", err);
     }
 
-    return { precision_score: precision, status: "Successful" };
+    return { precision_score: precision, status: resultStatus };
   },
 
   getHistory: async (patientId?: string): Promise<CalibrationRecord[]> => {
@@ -131,6 +134,40 @@ export const calibrationService = {
       return list;
     } catch {
       return [];
+    }
+  },
+
+  getLatestCalibration: (patientId?: string): CalibrationRecord | null => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return null;
+      const list: CalibrationRecord[] = JSON.parse(raw);
+      if (patientId) {
+        const matching = list.find((item) => item.patient_id === patientId);
+        return matching || null;
+      }
+      return list[0] || null;
+    } catch {
+      return null;
+    }
+  },
+
+  isCalibrated: (patientId?: string): boolean => {
+    try {
+      const latest = calibrationService.getLatestCalibration(patientId);
+      if (latest && latest.precision_score >= MIN_CALIBRATION_ACCURACY && latest.status === "Successful") {
+        return true;
+      }
+      const rawStatus = localStorage.getItem("foceye_calibration_status");
+      if (rawStatus) {
+        const parsed = JSON.parse(rawStatus);
+        if (parsed.status === "Calibrated" && (parsed.precision_score || 0) >= MIN_CALIBRATION_ACCURACY) {
+          return true;
+        }
+      }
+      return false;
+    } catch {
+      return false;
     }
   },
 };

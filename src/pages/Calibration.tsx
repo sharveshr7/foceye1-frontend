@@ -515,14 +515,42 @@ export default function Calibration() {
                 <Focus size={48} className="text-primary mx-auto" />
                 <h3 className="text-xl font-bold text-foreground">Validating Calibration Matrix</h3>
                 <p className="text-xs text-muted-foreground max-w-md mx-auto">
-                  Computed 9-point affine gaze transformation with accuracy of {accuracyScore}%.
+                  Computed 9-point affine gaze transformation with tracking accuracy of {accuracyScore}%.
                 </p>
-                <button
-                  onClick={nextStep}
-                  className="px-6 py-2.5 bg-primary text-primary-foreground font-bold rounded-xl text-xs cursor-pointer shadow-lg shadow-primary/20"
-                >
-                  Accept & Complete Calibration ➔
-                </button>
+
+                {accuracyScore >= 85 ? (
+                  <div className="space-y-3">
+                    <div className="inline-flex items-center gap-2 px-3 py-1 bg-emerald-500/10 text-emerald-500 rounded-full text-xs font-bold border border-emerald-500/20">
+                      <CheckCircle2 size={14} /> Calibration Accuracy Verified (≥85%)
+                    </div>
+                    <div>
+                      <button
+                        onClick={nextStep}
+                        className="px-6 py-2.5 bg-primary text-primary-foreground font-bold rounded-xl text-xs cursor-pointer shadow-lg shadow-primary/20"
+                      >
+                        Accept & Complete Calibration ➔
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-500 text-xs font-bold flex items-center justify-center gap-2 max-w-md mx-auto">
+                      <AlertCircle size={16} /> Accuracy Insufficient ({accuracyScore}% &lt; 85%). Recalibration required before therapy.
+                    </div>
+                    <div>
+                      <button
+                        onClick={() => {
+                          setActivePointIndex(0);
+                          setHoldProgress(0);
+                          setStep("calibration-points");
+                        }}
+                        className="px-6 py-2.5 bg-amber-500 text-white font-bold rounded-xl text-xs cursor-pointer shadow-lg shadow-amber-500/20"
+                      >
+                        Recalibrate Gaze Grid ➔
+                      </button>
+                    </div>
+                  </div>
+                )}
               </motion.div>
             )}
 
@@ -531,22 +559,25 @@ export default function Calibration() {
                 <div className="w-16 h-16 rounded-3xl bg-emerald-500 text-white flex items-center justify-center mx-auto shadow-xl shadow-emerald-500/30">
                   <ShieldCheck size={32} />
                 </div>
-                <h3 className="text-2xl font-extrabold text-foreground">Calibration Verified</h3>
+                <h3 className="text-2xl font-extrabold text-foreground">Calibration Verified ({accuracyScore}%)</h3>
                 <p className="text-xs text-muted-foreground max-w-md mx-auto">
-                  Patient {selectedPatient.firstName} {selectedPatient.lastName} is now calibrated for high-precision eye therapy and vision testing.
+                  Patient {selectedPatient.firstName} {selectedPatient.lastName} has completed 9-point foveal gaze calibration and is ready for Eye Movement Assessment.
                 </p>
                 <div className="flex items-center justify-center gap-3 pt-2">
                   <button
                     onClick={saveCalibration}
-                    className="px-6 py-2.5 bg-primary text-primary-foreground rounded-xl font-bold text-xs cursor-pointer shadow-lg shadow-primary/20"
-                  >
-                    Save to Patient Record
-                  </button>
-                  <button
-                    onClick={() => navigate("/therapy-session")}
                     className="px-6 py-2.5 bg-muted hover:bg-muted/80 text-foreground rounded-xl font-bold text-xs cursor-pointer"
                   >
-                    Launch Therapy Game ➔
+                    Save Calibration
+                  </button>
+                  <button
+                    onClick={() => {
+                      saveCalibration();
+                      navigate("/vision-test");
+                    }}
+                    className="px-6 py-2.5 bg-primary text-primary-foreground rounded-xl font-bold text-xs cursor-pointer shadow-lg shadow-primary/20 flex items-center gap-1.5"
+                  >
+                    Start Eye Movement Assessment <ChevronRight size={14} />
                   </button>
                 </div>
               </motion.div>

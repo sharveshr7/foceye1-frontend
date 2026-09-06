@@ -36,6 +36,8 @@ import { GazeHeatmap, type GazePoint } from "@/components/therapy/GazeHeatmap";
 import { PediatricRewardsModal } from "@/components/therapy/PediatricRewardsModal";
 import type { EyeTrackingFrame } from "@/utils/eyeTracker";
 import { useGazeTelemetry } from "@/hooks/useGazeTelemetry";
+import { calibrationService } from "@/services/calibration.service";
+import { voiceCoach } from "@/utils/voiceCoach";
 
 type SessionStep = "exercise-selection" | "instructions" | "setup" | "active" | "summary";
 type TherapyMode = "mobile" | "device";
@@ -78,6 +80,9 @@ export default function TherapySession() {
   const navigate = useNavigate();
   const location = useLocation();
   const { selectedPatient } = usePatient();
+
+  const isCalibrated = calibrationService.isCalibrated(selectedPatient?.id);
+  const latestCalib = calibrationService.getLatestCalibration(selectedPatient?.id);
 
   const mode: TherapyMode = location.state?.mode || "mobile";
   const [step, setStep] = useState<SessionStep>(location.state?.prescribedExerciseId ? "instructions" : "exercise-selection");
@@ -256,11 +261,13 @@ export default function TherapySession() {
   const pauseSession = () => {
     setIsPlaying(false);
     setTherapyStatus("Paused");
+    voiceCoach.speak("Session paused.");
   };
 
   const resumeSession = () => {
     setIsPlaying(true);
     setTherapyStatus("In Progress");
+    voiceCoach.speak("Session resumed. Follow the target.");
   };
 
   const endSession = () => {
@@ -269,6 +276,7 @@ export default function TherapySession() {
     setSessionDate(new Date());
     setSaveReady(true);
     setStep("summary");
+    voiceCoach.speak("Session complete. Excellent work!");
   };
 
   const saveSession = async () => {
@@ -305,6 +313,41 @@ export default function TherapySession() {
     );
   }
 
+  if (!isCalibrated) {
+    return (
+      <div className="fixed inset-0 bg-background z-50 flex items-center justify-center p-8 font-outfit">
+        <div className="card-soft max-w-lg text-center space-y-5 border border-amber-500/30">
+          <div className="w-16 h-16 rounded-2xl bg-amber-500/10 text-amber-500 flex items-center justify-center mx-auto">
+            <AlertTriangle size={36} />
+          </div>
+          <div className="space-y-2">
+            <span className="bg-amber-500/10 text-amber-500 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">
+              Step 1: Eye Calibration Required
+            </span>
+            <h2 className="text-2xl font-bold text-foreground">Eye Tracking Uncalibrated</h2>
+            <p className="text-muted-foreground text-sm leading-relaxed">
+              Clinical protocol requires completion of 9-point eye calibration (minimum 85% accuracy) before launching therapy exercises. Calibration ensures accurate real-time gaze biofeedback and voice coaching.
+            </p>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-3 justify-center">
+            <button
+              onClick={() => navigate("/calibration")}
+              className="px-6 py-3.5 bg-primary text-primary-foreground rounded-xl font-bold shadow-lg shadow-primary/20 hover:scale-[1.02] transition-transform flex items-center justify-center gap-2 cursor-pointer"
+            >
+              Complete Eye Calibration (Step 1) →
+            </button>
+            <button
+              onClick={() => navigate("/dashboard")}
+              className="px-6 py-3.5 bg-muted text-muted-foreground hover:text-foreground rounded-xl font-bold transition-colors cursor-pointer"
+            >
+              Back to Dashboard
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="fixed inset-0 bg-background z-50 flex flex-col font-outfit overflow-hidden">
       <header className="px-8 py-5 flex justify-between items-center bg-card/80 backdrop-blur-xl border-b border-white/10 z-30">
@@ -331,6 +374,11 @@ export default function TherapySession() {
               <span className="px-2 py-0.5 bg-secondary/10 text-[10px] font-bold text-secondary rounded uppercase">
                 {therapyStatus}
               </span>
+              {isCalibrated && (
+                <span className="px-2 py-0.5 bg-emerald-500/10 text-[10px] font-bold text-emerald-500 rounded uppercase">
+                  Calibrated: {latestCalib?.accuracy || 94}%
+                </span>
+              )}
             </div>
             <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">
               {selectedPatient.firstName} {selectedPatient.lastName} · {selectedPatient.id} ·{" "}

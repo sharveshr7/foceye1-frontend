@@ -18,6 +18,7 @@ import {
 import type { TherapyExercise } from "@/lib/therapies";
 import type { EyeTrackingFrame } from "@/utils/eyeTracker";
 import { soundEffects } from "@/utils/audioSynth";
+import { voiceCoach, type GazeEvaluation } from "@/utils/voiceCoach";
 
 export interface TherapyCanvasProps {
   exercise: TherapyExercise;
@@ -56,10 +57,29 @@ export const TherapyCanvas: React.FC<TherapyCanvasProps> = ({
   const [fixationHoldProgress, setFixationHoldProgress] = useState(0);
   const [detectedBlinksCount, setDetectedBlinksCount] = useState(0);
 
+  // Synchronized Voice Coach Biofeedback States
+  const [coachFeedback, setCoachFeedback] = useState<GazeEvaluation | null>(null);
+  const [isVoiceMuted, setIsVoiceMuted] = useState<boolean>(() => voiceCoach.getMuted());
+
   const containerRef = useRef<HTMLDivElement | null>(null);
   const targetPosRef = useRef<{ x: number; y: number }>({ x: 0.5, y: 0.5 });
   const lastBlinkStateRef = useRef<boolean>(false);
   const lastChimeTimeRef = useRef<number>(0);
+
+  // Initial Voice Cue on session launch
+  useEffect(() => {
+    if (isPlaying && exercise) {
+      if (exercise.id === "blink-master") {
+        voiceCoach.speak("Blink your eyes completely on each cue.");
+      } else if (exercise.id === "focus-hold") {
+        voiceCoach.speak("Look straight ahead and keep your head still.");
+      } else if (exercise.id === "reaction-speed" || exercise.id === "saccade-jumps") {
+        voiceCoach.speak("Look at the target as quickly as possible.");
+      } else {
+        voiceCoach.speak("Follow the moving target.");
+      }
+    }
+  }, [isPlaying, exercise.id]);
 
   // Saccadic Latency & Reaction Measurement States (in milliseconds)
   const [lastLatencyMs, setLastLatencyMs] = useState<number | null>(null);
@@ -169,6 +189,19 @@ export const TherapyCanvas: React.FC<TherapyCanvasProps> = ({
     const dy = gazePixelY - targetPixelY;
     const distance = Math.sqrt(dx * dx + dy * dy);
     setGazeDistancePx(Math.round(distance));
+
+    // Synchronized Voice Coaching & Directional Guidance
+    const normTargetX = targetPixelX / rect.width;
+    const normTargetY = targetPixelY / rect.height;
+    const evalResult = voiceCoach.evaluateGazeAndCoach(
+      normTargetX,
+      normTargetY,
+      gazeFrame.gazeX,
+      gazeFrame.gazeY,
+      gazeFrame.confidence,
+      gazeFrame.isBlinking
+    );
+    setCoachFeedback(evalResult);
 
     // Determine lock threshold based on exercise mode
     const lockThreshold = exercise.id === "focus-hold" ? 75 : 95;
@@ -626,6 +659,57 @@ export const TherapyCanvas: React.FC<TherapyCanvasProps> = ({
               <span>BPM: <b className="text-secondary">{gazeFrame?.blinkRatePerMin ?? 16}</b></span>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* --- SYNCHRONIZED VOICE COACH & REAL-TIME BIOFEEDBACK HUD --- */}
+      {isPlaying && (
+        <div className="absolute bottom-4 left-6 z-40 flex items-center gap-2 pointer-events-auto">
+          <div
+            className={`px-3.5 py-1.5 rounded-full border text-xs font-bold flex items-center gap-2 backdrop-blur-md shadow-2xl transition-all ${
+              coachFeedback?.status === "aligned"
+                ? "bg-emerald-950/85 border-emerald-500/50 text-emerald-300 shadow-[0_0_15px_rgba(16,185,129,0.3)]"
+                : coachFeedback?.status === "correcting"
+                ? "bg-amber-950/85 border-amber-500/50 text-amber-300 shadow-[0_0_15px_rgba(245,158,11,0.3)]"
+                : "bg-black/85 border-white/15 text-white/90"
+            }`}
+          >
+            <span className="relative flex h-2 w-2">
+              <span
+                className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
+                  coachFeedback?.status === "aligned" ? "bg-emerald-400" : "bg-amber-400"
+                }`}
+              />
+              <span
+                className={`relative inline-flex rounded-full h-2 w-2 ${
+                  coachFeedback?.status === "aligned" ? "bg-emerald-500" : "bg-amber-500"
+                }`}
+              />
+            </span>
+            <span className="uppercase tracking-wider text-[10px] text-white/50 font-semibold">
+              Voice Coach:
+            </span>
+            <span className="font-bold">
+              {coachFeedback?.instruction || "Follow the moving target."}
+            </span>
+          </div>
+
+          <button
+            onClick={() => {
+              const next = !voiceCoach.getMuted();
+              voiceCoach.setMuted(next);
+              setIsVoiceMuted(next);
+            }}
+            className={`px-3 py-1.5 rounded-full border text-xs font-bold flex items-center gap-1.5 backdrop-blur-md transition-all ${
+              isVoiceMuted
+                ? "bg-black/80 border-white/10 text-muted-foreground hover:text-white"
+                : "bg-primary/20 border-primary/40 text-primary hover:bg-primary/30"
+            }`}
+            title={isVoiceMuted ? "Unmute Voice Coach Guidance" : "Mute Voice Coach Guidance"}
+          >
+            {isVoiceMuted ? <VolumeX size={13} /> : <Volume2 size={13} />}
+            <span className="text-[10px] uppercase font-bold">{isVoiceMuted ? "Muted" : "Voice Active"}</span>
+          </button>
         </div>
       )}
     </div>
