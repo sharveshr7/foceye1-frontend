@@ -100,7 +100,7 @@ const ASSESSMENT_STEPS: StepConfig[] = [
 
 export default function VisionTest() {
   const navigate = useNavigate();
-  const { selectedPatient } = usePatient();
+  const { selectedPatient, updatePatient } = usePatient();
 
   const [step, setStep] = useState<TestStep>("camera_check");
   const [status, setStatus] = useState("Automatic Camera Check");
@@ -339,6 +339,16 @@ export default function VisionTest() {
         metrics,
       });
 
+      if (selectedPatient) {
+        await updatePatient(selectedPatient.id, {
+          clinicalStatus: "EYE_TEST_COMPLETED",
+          observedPattern: diagnosisData.suspectedVisualProblem || diagnosisData.clinicalSummary || "Eye-tracking baseline recorded",
+          eyeCondition: diagnosisData.suspectedVisualProblem || selectedPatient.eyeCondition,
+          diagnosis: diagnosisData.clinicalSummary || selectedPatient.diagnosis,
+          recommendedTherapyId: diagnosisData.primaryExerciseId,
+        });
+      }
+
       navigate("/ai-insights", {
         state: {
           diagnosis: diagnosisData,
@@ -366,6 +376,17 @@ export default function VisionTest() {
         verticalGazeRangeDeg: metrics.verticalGazeRangeDeg,
         totalFramesSampled: 35,
       });
+
+      if (selectedPatient) {
+        await updatePatient(selectedPatient.id, {
+          clinicalStatus: "EYE_TEST_COMPLETED",
+          observedPattern: fallbackDiag.suspectedVisualProblem || fallbackDiag.clinicalSummary || "Eye-tracking baseline recorded",
+          eyeCondition: fallbackDiag.suspectedVisualProblem || selectedPatient.eyeCondition,
+          diagnosis: fallbackDiag.clinicalSummary || selectedPatient.diagnosis,
+          recommendedTherapyId: fallbackDiag.primaryExerciseId,
+        });
+      }
+
       navigate("/ai-insights", {
         state: {
           diagnosis: fallbackDiag,

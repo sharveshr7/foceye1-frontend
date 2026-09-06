@@ -21,6 +21,7 @@ import {
   Trash2,
   RotateCcw,
   FileText,
+  Eye,
 } from "lucide-react";
 import { toast } from "sonner";
 import { usePatient } from "@/contexts/PatientContext";
@@ -39,11 +40,11 @@ const blankForm: PatientInput = {
   address: "",
   emergencyContact: "",
   medicalHistory: "",
-  eyeCondition: "Convergence Insufficiency",
-  diagnosis: "Convergence insufficiency",
+  initialObservation: "",
   assignedDoctor: "Dr. Rachel Evans, MD",
   notes: "",
   status: "Active",
+  clinicalStatus: "EYE_TEST_PENDING",
 };
 
 export default function Patients() {
@@ -70,7 +71,7 @@ export default function Patients() {
 
   const filteredPatients = useMemo(() => {
     return patients.filter((patient) => {
-      const matchesQuery = `${patient.id} ${patient.firstName} ${patient.lastName} ${patient.assignedDoctor} ${patient.eyeCondition}`
+      const matchesQuery = `${patient.id} ${patient.firstName} ${patient.lastName} ${patient.assignedDoctor} ${patient.eyeCondition || ""} ${patient.observedPattern || ""} ${patient.initialObservation || ""}`
         .toLowerCase()
         .includes(query.toLowerCase());
       const matchesStatus =
@@ -271,10 +272,10 @@ export default function Patients() {
               <thead className="text-left text-muted-foreground bg-muted/20 border-b border-border">
                 <tr>
                   <th className="p-4 font-bold text-xs uppercase tracking-wider">Patient</th>
-                  <th className="p-4 font-bold text-xs uppercase tracking-wider">Condition</th>
-                  <th className="p-4 font-bold text-xs uppercase tracking-wider">Assigned Doctor</th>
-                  <th className="p-4 font-bold text-xs uppercase tracking-wider">Status</th>
-                  <th className="p-4 font-bold text-xs uppercase tracking-wider text-right">Actions</th>
+                  <th className="p-4 font-bold text-xs uppercase tracking-wider">Clinical Findings</th>
+                  <th className="p-4 font-bold text-xs uppercase tracking-wider">Assigned Clinician</th>
+                  <th className="p-4 font-bold text-xs uppercase tracking-wider">Clinical Status</th>
+                  <th className="p-4 font-bold text-xs uppercase tracking-wider text-right">Workflow Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -289,6 +290,7 @@ export default function Patients() {
                 ) : (
                   filteredPatients.map((patient) => {
                     const isSelected = selectedPatient?.id === patient.id;
+                    const cs = patient.clinicalStatus || (patient.status === "Archived" ? "Archived" : "EYE_TEST_PENDING");
                     return (
                       <tr
                         key={patient.id}
@@ -324,35 +326,87 @@ export default function Patients() {
                           </button>
                         </td>
                         <td className="p-4">
-                          <span className="font-semibold text-foreground block text-xs">{patient.eyeCondition || "General"}</span>
-                          <span className="text-[11px] text-muted-foreground block truncate max-w-[180px]">
-                            {patient.diagnosis || "Under evaluation"}
+                          <span className="font-semibold text-foreground block text-xs">
+                            {patient.observedPattern || (cs === "EYE_TEST_PENDING" || cs === "REGISTERED" ? "Eye Test Required" : patient.eyeCondition || "Under Assessment")}
+                          </span>
+                          <span className="text-[11px] text-muted-foreground block truncate max-w-[220px]">
+                            {patient.initialObservation ? `Obs: ${patient.initialObservation}` : (patient.diagnosis || "No pre-test observations")}
                           </span>
                         </td>
                         <td className="p-4 text-xs font-medium text-foreground">{patient.assignedDoctor || "Unassigned"}</td>
                         <td className="p-4">
-                          <span
-                            className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${
-                              patient.status === "Active"
-                                ? "bg-green-500/10 text-green-500 border border-green-500/20"
-                                : "bg-muted text-muted-foreground"
-                            }`}
-                          >
-                            {patient.status || "Active"}
-                          </span>
+                          {(() => {
+                            let badgeClass = "bg-muted text-muted-foreground";
+                            let badgeText = "Registered";
+
+                            if (cs === "EYE_TEST_PENDING" || cs === "REGISTERED") {
+                              badgeClass = "bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20";
+                              badgeText = "Eye Test Pending";
+                            } else if (cs === "EYE_TEST_COMPLETED") {
+                              badgeClass = "bg-blue-500/10 text-blue-500 border border-blue-500/20";
+                              badgeText = "Analysis Pending";
+                            } else if (cs === "AI_ANALYSIS_COMPLETED" || cs === "THERAPY_RECOMMENDED") {
+                              badgeClass = "bg-purple-500/10 text-purple-500 border border-purple-500/20";
+                              badgeText = "Therapy Recommended";
+                            } else if (cs === "THERAPY_IN_PROGRESS") {
+                              badgeClass = "bg-cyan-500/10 text-cyan-500 border border-cyan-500/20";
+                              badgeText = "Therapy In Progress";
+                            } else if (cs === "THERAPY_COMPLETED") {
+                              badgeClass = "bg-green-500/10 text-green-500 border border-green-500/20";
+                              badgeText = "Therapy Completed";
+                            }
+
+                            return (
+                              <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full whitespace-nowrap ${badgeClass}`}>
+                                {badgeText}
+                              </span>
+                            );
+                          })()}
                         </td>
                         <td className="p-4 text-right">
                           <div className="flex items-center justify-end gap-2">
-                            <button
-                              onClick={() => {
-                                selectPatient(patient);
-                                navigate("/mode-selection");
-                              }}
-                              title="Start Therapy Session"
-                              className="px-3 py-1.5 bg-primary/10 text-primary hover:bg-primary hover:text-primary-foreground rounded-xl text-xs font-bold transition-all flex items-center gap-1"
-                            >
-                              Therapy <ArrowRight size={13} />
-                            </button>
+                            {(() => {
+                              if (cs === "EYE_TEST_PENDING" || cs === "REGISTERED") {
+                                return (
+                                  <button
+                                    onClick={() => {
+                                      selectPatient(patient);
+                                      navigate("/vision-test");
+                                    }}
+                                    title="Start Baseline Eye Test"
+                                    className="px-3 py-1.5 bg-amber-500/10 text-amber-600 dark:text-amber-400 hover:bg-amber-500 hover:text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1 whitespace-nowrap"
+                                  >
+                                    <Eye size={13} /> Eye Test
+                                  </button>
+                                );
+                              }
+                              if (cs === "EYE_TEST_COMPLETED") {
+                                return (
+                                  <button
+                                    onClick={() => {
+                                      selectPatient(patient);
+                                      navigate("/ai-insights");
+                                    }}
+                                    title="Run AI Analysis"
+                                    className="px-3 py-1.5 bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-500 hover:text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1 whitespace-nowrap"
+                                  >
+                                    <Sparkles size={13} /> AI Analysis
+                                  </button>
+                                );
+                              }
+                              return (
+                                <button
+                                  onClick={() => {
+                                    selectPatient(patient);
+                                    navigate("/mode-selection");
+                                  }}
+                                  title="Start Prescribed Therapy Session"
+                                  className="px-3 py-1.5 bg-primary/10 text-primary hover:bg-primary hover:text-primary-foreground rounded-xl text-xs font-bold transition-all flex items-center gap-1 whitespace-nowrap"
+                                >
+                                  Therapy <ArrowRight size={13} />
+                                </button>
+                              );
+                            })()}
                             <button
                               title="View Official Clinical Report"
                               onClick={() => {
@@ -512,45 +566,34 @@ export default function Patients() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-bold text-foreground mb-1">Eye Condition / Category</label>
-                    <select
-                      value={form.eyeCondition}
-                      onChange={(e) => setForm({ ...form, eyeCondition: e.target.value })}
-                      className="w-full px-3 py-2.5 bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 font-medium"
-                    >
-                      <option value="Convergence Insufficiency">Convergence Insufficiency</option>
-                      <option value="Amblyopia">Amblyopia (Lazy Eye)</option>
-                      <option value="Strabismus">Strabismus</option>
-                      <option value="Binocular Vision Dysfunction">Binocular Vision Dysfunction</option>
-                      <option value="Eye Movement Disorders">Eye Movement Disorders</option>
-                      <option value="Digital Eye Strain">Digital Eye Strain</option>
-                      <option value="Refractive Errors">Refractive Errors</option>
-                      <option value="General Eye Wellness">General Eye Wellness</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-foreground mb-1">Assigned Doctor</label>
-                    <input
-                      type="text"
-                      placeholder="Dr. Rachel Evans, MD"
-                      value={form.assignedDoctor}
-                      onChange={(e) => setForm({ ...form, assignedDoctor: e.target.value })}
-                      className="w-full px-3.5 py-2.5 bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
-                    />
-                  </div>
-                </div>
-
                 <div>
-                  <label className="block text-xs font-bold text-foreground mb-1">Clinical Diagnosis</label>
+                  <label className="block text-xs font-bold text-foreground mb-1">Assigned Clinician / Doctor</label>
                   <input
                     type="text"
-                    placeholder="e.g. Convergence insufficiency with reading fatigue"
-                    value={form.diagnosis}
-                    onChange={(e) => setForm({ ...form, diagnosis: e.target.value })}
+                    placeholder="Dr. Rachel Evans, MD"
+                    value={form.assignedDoctor}
+                    onChange={(e) => setForm({ ...form, assignedDoctor: e.target.value })}
                     className="w-full px-3.5 py-2.5 bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
                   />
+                </div>
+
+                <div className="p-3.5 bg-primary/5 border border-primary/20 rounded-xl space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-xs font-bold text-foreground">
+                      Initial Physical Observation <span className="text-muted-foreground font-normal">(Objective signs prior to eye test)</span>
+                    </label>
+                    <span className="text-[10px] uppercase font-bold text-primary tracking-wide">Pre-Test Observation</span>
+                  </div>
+                  <textarea
+                    rows={2}
+                    placeholder="E.g. Mild conjunctival redness noted, head tilt to right shoulder, normal pupil reactivity, no visible ptosis..."
+                    value={form.initialObservation || ""}
+                    onChange={(e) => setForm({ ...form, initialObservation: e.target.value })}
+                    className="w-full px-3.5 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 resize-none"
+                  />
+                  <p className="text-[11px] text-muted-foreground">
+                    Record only objective observable signs. Eye movement patterns and clinical therapy recommendations will be automatically determined after the Eye Test and AI Analysis.
+                  </p>
                 </div>
 
                 <div>

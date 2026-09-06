@@ -88,15 +88,48 @@ export default function Dashboard() {
               {selectedPatient ? selectedPatient.firstName[0] : <UserRound size={22} />}
             </div>
             <div>
-              <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">
-                Active Patient Session
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">
+                  Active Patient Session
+                </span>
+                {selectedPatient && (
+                  <span
+                    className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                      selectedPatient.clinicalStatus === "EYE_TEST_PENDING" || !selectedPatient.clinicalStatus
+                        ? "bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/20"
+                        : selectedPatient.clinicalStatus === "EYE_TEST_COMPLETED"
+                        ? "bg-blue-500/15 text-blue-500 border border-blue-500/20"
+                        : selectedPatient.clinicalStatus === "THERAPY_RECOMMENDED"
+                        ? "bg-purple-500/15 text-purple-500 border border-purple-500/20"
+                        : selectedPatient.clinicalStatus === "THERAPY_IN_PROGRESS"
+                        ? "bg-cyan-500/15 text-cyan-500 border border-cyan-500/20"
+                        : "bg-green-500/15 text-green-500 border border-green-500/20"
+                    }`}
+                  >
+                    {selectedPatient.clinicalStatus === "EYE_TEST_PENDING" || !selectedPatient.clinicalStatus
+                      ? "Eye Test Pending"
+                      : selectedPatient.clinicalStatus === "EYE_TEST_COMPLETED"
+                      ? "Analysis Pending"
+                      : selectedPatient.clinicalStatus === "THERAPY_RECOMMENDED"
+                      ? "Therapy Recommended"
+                      : selectedPatient.clinicalStatus === "THERAPY_IN_PROGRESS"
+                      ? "Therapy In Progress"
+                      : "Therapy Completed"}
+                  </span>
+                )}
+              </div>
               <h2 className="text-xl font-bold text-foreground">
                 {selectedPatient ? `${selectedPatient.firstName} ${selectedPatient.lastName}` : "No Patient Selected"}
               </h2>
               <p className="text-xs text-muted-foreground">
                 {selectedPatient
-                  ? `${selectedPatient.id} · ${selectedPatient.age} yrs · Condition: ${selectedPatient.eyeCondition}`
+                  ? `${selectedPatient.id} · ${selectedPatient.age} yrs · ${
+                      selectedPatient.observedPattern
+                        ? `Findings: ${selectedPatient.observedPattern}`
+                        : selectedPatient.initialObservation
+                        ? `Observation: ${selectedPatient.initialObservation}`
+                        : "Awaiting baseline eye-tracking test"
+                    }`
                   : `Currently managing ${patients.length} registered hospital patients`}
               </p>
             </div>
@@ -107,16 +140,173 @@ export default function Dashboard() {
               onClick={() => navigate("/patients")}
               className="px-4 py-2 bg-muted hover:bg-muted/80 text-foreground rounded-xl text-xs font-bold transition-colors cursor-pointer border border-border"
             >
-              Switch Patient
+              {selectedPatient ? "Switch Patient" : "Select Patient"}
             </button>
-            <button
-              onClick={() => navigate("/mode-selection")}
-              className="px-4 py-2 bg-primary text-primary-foreground rounded-xl text-xs font-bold transition-all hover:bg-primary/90 shadow-sm cursor-pointer flex items-center gap-1.5"
-            >
-              <Play size={14} /> Start Therapy
-            </button>
+            {(() => {
+              if (!selectedPatient) {
+                return (
+                  <button
+                    onClick={() => navigate("/patients")}
+                    className="px-4 py-2 bg-primary text-primary-foreground rounded-xl text-xs font-bold transition-all hover:bg-primary/90 shadow-sm cursor-pointer flex items-center gap-1.5"
+                  >
+                    <UserRound size={14} /> Add Patient
+                  </button>
+                );
+              }
+              const cs = selectedPatient.clinicalStatus || "EYE_TEST_PENDING";
+              if (cs === "EYE_TEST_PENDING" || cs === "REGISTERED") {
+                return (
+                  <button
+                    onClick={() => navigate("/vision-test")}
+                    className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer flex items-center gap-1.5"
+                  >
+                    <Eye size={14} /> Start Eye Test
+                  </button>
+                );
+              }
+              if (cs === "EYE_TEST_COMPLETED") {
+                return (
+                  <button
+                    onClick={() => navigate("/ai-insights")}
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer flex items-center gap-1.5"
+                  >
+                    <Sparkles size={14} /> Run AI Analysis
+                  </button>
+                );
+              }
+              return (
+                <button
+                  onClick={() => navigate("/mode-selection")}
+                  className="px-4 py-2 bg-primary text-primary-foreground rounded-xl text-xs font-bold transition-all hover:bg-primary/90 shadow-sm cursor-pointer flex items-center gap-1.5"
+                >
+                  <Play size={14} /> Start Therapy
+                </button>
+              );
+            })()}
           </div>
         </div>
+      </section>
+
+      {/* Clinical Workflow Progression Hierarchy */}
+      <section className="card-soft border-primary/20 p-4 bg-muted/20">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-3">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-primary">
+            Clinical Protocol Progression
+          </span>
+          <span className="text-[11px] text-muted-foreground">
+            Stage-gated workflow: Add Patient → Eye Test → AI Analysis → Therapy
+          </span>
+        </div>
+        {(() => {
+          const cs = selectedPatient?.clinicalStatus || (selectedPatient ? "EYE_TEST_PENDING" : "REGISTERED");
+          const step1Done = !!selectedPatient;
+          const step2Active = cs === "EYE_TEST_PENDING" || cs === "REGISTERED";
+          const step2Done = ["EYE_TEST_COMPLETED", "AI_ANALYSIS_COMPLETED", "THERAPY_RECOMMENDED", "THERAPY_IN_PROGRESS", "THERAPY_COMPLETED"].includes(cs);
+          const step3Active = cs === "EYE_TEST_COMPLETED";
+          const step3Done = ["AI_ANALYSIS_COMPLETED", "THERAPY_RECOMMENDED", "THERAPY_IN_PROGRESS", "THERAPY_COMPLETED"].includes(cs);
+          const step4Active = ["THERAPY_RECOMMENDED", "THERAPY_IN_PROGRESS"].includes(cs);
+          const step4Done = cs === "THERAPY_COMPLETED";
+
+          return (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
+              <div
+                onClick={() => navigate("/patients")}
+                className={`p-3 rounded-xl border text-left cursor-pointer transition-all ${
+                  step1Done
+                    ? "bg-primary/10 border-primary/30 text-foreground"
+                    : "bg-background border-dashed border-border text-muted-foreground"
+                }`}
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[10px] font-bold uppercase">1. Add Patient</span>
+                  {step1Done && <CheckCircle2 size={13} className="text-primary" />}
+                </div>
+                <p className="text-xs font-bold truncate">
+                  {selectedPatient ? `${selectedPatient.firstName} ${selectedPatient.lastName}` : "Demographics Only"}
+                </p>
+                <p className="text-[10px] text-muted-foreground">No premature diagnosis</p>
+              </div>
+
+              <div
+                onClick={() => selectedPatient && navigate("/vision-test")}
+                className={`p-3 rounded-xl border text-left transition-all ${
+                  !selectedPatient
+                    ? "opacity-50 cursor-not-allowed bg-background border-border text-muted-foreground"
+                    : step2Active
+                    ? "bg-amber-500/10 border-amber-500/40 text-amber-900 dark:text-amber-200 cursor-pointer shadow-sm ring-1 ring-amber-500/20"
+                    : step2Done
+                    ? "bg-primary/10 border-primary/30 text-foreground cursor-pointer"
+                    : "bg-background border-border text-muted-foreground"
+                }`}
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[10px] font-bold uppercase">2. Eye Test</span>
+                  {step2Done ? (
+                    <CheckCircle2 size={13} className="text-primary" />
+                  ) : step2Active ? (
+                    <Eye size={13} className="text-amber-600 dark:text-amber-400 animate-pulse" />
+                  ) : null}
+                </div>
+                <p className="text-xs font-bold truncate">
+                  {step2Done ? "Assessment Recorded" : "Camera Tracking Test"}
+                </p>
+                <p className="text-[10px] text-muted-foreground">Collect objective data</p>
+              </div>
+
+              <div
+                onClick={() => step2Done && navigate("/ai-insights")}
+                className={`p-3 rounded-xl border text-left transition-all ${
+                  !step2Done
+                    ? "opacity-50 cursor-not-allowed bg-background border-border text-muted-foreground"
+                    : step3Active
+                    ? "bg-blue-500/10 border-blue-500/40 text-blue-900 dark:text-blue-200 cursor-pointer shadow-sm ring-1 ring-blue-500/20"
+                    : step3Done
+                    ? "bg-primary/10 border-primary/30 text-foreground cursor-pointer"
+                    : "bg-background border-border text-muted-foreground"
+                }`}
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[10px] font-bold uppercase">3. AI Analysis</span>
+                  {step3Done ? (
+                    <CheckCircle2 size={13} className="text-primary" />
+                  ) : step3Active ? (
+                    <Sparkles size={13} className="text-blue-500 animate-pulse" />
+                  ) : null}
+                </div>
+                <p className="text-xs font-bold truncate">
+                  {step3Done ? "Findings Identified" : "Analyze Eye Movement"}
+                </p>
+                <p className="text-[10px] text-muted-foreground">Observed pattern detection</p>
+              </div>
+
+              <div
+                onClick={() => step3Done && navigate("/mode-selection")}
+                className={`p-3 rounded-xl border text-left transition-all ${
+                  !step3Done
+                    ? "opacity-50 cursor-not-allowed bg-background border-border text-muted-foreground"
+                    : step4Done
+                    ? "bg-green-500/10 border-green-500/30 text-foreground cursor-pointer"
+                    : step4Active
+                    ? "bg-purple-500/10 border-purple-500/40 text-purple-900 dark:text-purple-200 cursor-pointer shadow-sm ring-1 ring-purple-500/20"
+                    : "bg-background border-border text-muted-foreground cursor-pointer"
+                }`}
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[10px] font-bold uppercase">4. Therapy</span>
+                  {step4Done ? (
+                    <CheckCircle2 size={13} className="text-green-500" />
+                  ) : step4Active ? (
+                    <Play size={13} className="text-purple-500" />
+                  ) : null}
+                </div>
+                <p className="text-xs font-bold truncate">
+                  {step4Done ? "Therapy Completed" : "Prescribed Sessions"}
+                </p>
+                <p className="text-[10px] text-muted-foreground">Voice-guided exercises</p>
+              </div>
+            </div>
+          );
+        })()}
       </section>
 
       {/* Primary Clinical KPI Metrics */}

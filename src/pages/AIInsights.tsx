@@ -34,7 +34,7 @@ import { voiceCoach, SUPPORTED_LANGUAGES, type SupportedLanguage } from "@/utils
 export default function AIInsights() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { selectedPatient } = usePatient();
+  const { selectedPatient, updatePatient } = usePatient();
 
   const [insight, setInsight] = useState<AIInsight | null>(null);
   const [diagnosis, setDiagnosis] = useState<AIDiagnosisAndPlan | null>(null);
@@ -50,9 +50,12 @@ export default function AIInsights() {
     const loadData = async () => {
       setLoading(true);
       try {
+        let activeDiag: AIDiagnosisAndPlan | null = null;
+
         // 1. If location state has freshly generated diagnosis from VisionTest
         if (location.state?.diagnosis) {
           const diag = location.state.diagnosis as AIDiagnosisAndPlan;
+          activeDiag = diag;
           if (isMounted) {
             setDiagnosis(diag);
             const initialEdits: Record<string, { duration: number; speed: number }> = {};
@@ -82,6 +85,7 @@ export default function AIInsights() {
           };
 
           const diag = await aiService.diagnoseAndPrescribe(defaultMetrics);
+          activeDiag = diag;
           if (isMounted) {
             setDiagnosis(diag);
             const initialEdits: Record<string, { duration: number; speed: number }> = {};
@@ -93,6 +97,17 @@ export default function AIInsights() {
             });
             setActivePlanEdits(initialEdits);
           }
+        }
+
+        // Persist patient status advancement to THERAPY_RECOMMENDED
+        if (selectedPatient && activeDiag) {
+          await updatePatient(selectedPatient.id, {
+            clinicalStatus: "THERAPY_RECOMMENDED",
+            observedPattern: activeDiag.suspectedVisualProblem || activeDiag.clinicalSummary,
+            eyeCondition: activeDiag.suspectedVisualProblem || selectedPatient.eyeCondition,
+            diagnosis: activeDiag.clinicalSummary || selectedPatient.diagnosis,
+            recommendedTherapyId: activeDiag.primaryExerciseId,
+          });
         }
 
         // 3. Load Clinical Recovery Insights
@@ -186,6 +201,29 @@ export default function AIInsights() {
 
       {/* Mandatory Clinical Decision Support System (CDSS) Disclaimer Banner */}
       <ClinicalDisclaimerBanner variant="banner" />
+
+      {/* Warning if baseline eye tracking test hasn't been conducted yet */}
+      {selectedPatient && (selectedPatient.clinicalStatus === "EYE_TEST_PENDING" || !selectedPatient.clinicalStatus) && !location.state?.diagnosis && !location.state?.assessmentScores && (
+        <div className="card-soft border-amber-500/30 bg-amber-500/5 p-4 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+              <Eye size={20} />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-foreground">Baseline Eye Test Recommended</h3>
+              <p className="text-xs text-muted-foreground">
+                Patient <span className="font-semibold text-foreground">{selectedPatient.firstName} {selectedPatient.lastName}</span> is in <span className="font-semibold text-amber-600 dark:text-amber-400">Eye Test Pending</span> state. Conduct the standardized camera eye-tracking test to collect real ocular metrics.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => navigate("/vision-test")}
+            className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 shadow-sm"
+          >
+            <Eye size={14} /> Start Eye Test
+          </button>
+        </div>
+      )}
 
       {/* Loading Skeleton */}
       {loading && !diagnosis && (

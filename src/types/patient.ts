@@ -1,5 +1,14 @@
 export type PatientStatus = "Active" | "Archived";
 
+export type PatientClinicalStatus =
+  | "REGISTERED"
+  | "EYE_TEST_PENDING"
+  | "EYE_TEST_COMPLETED"
+  | "AI_ANALYSIS_COMPLETED"
+  | "THERAPY_RECOMMENDED"
+  | "THERAPY_IN_PROGRESS"
+  | "THERAPY_COMPLETED";
+
 export interface Patient {
   id: string;
   hospitalId: string;
@@ -13,11 +22,15 @@ export interface Patient {
   address: string;
   emergencyContact: string;
   medicalHistory: string;
-  eyeCondition: string;
-  diagnosis: string;
+  initialObservation?: string;
+  eyeCondition?: string;
+  diagnosis?: string;
   assignedDoctor: string;
   registrationDate: string;
   status: PatientStatus;
+  clinicalStatus?: PatientClinicalStatus;
+  observedPattern?: string;
+  recommendedTherapyId?: string;
   notes: string;
 }
 

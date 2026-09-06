@@ -38,41 +38,60 @@ export const patientService = {
   },
 
   async list(): Promise<Patient[]> {
+    const localPatients = this.getLocalPatients();
+    const localMap = new Map(localPatients.map((p) => [p.id, p]));
+
     try {
       const remotePatients = await ApiClient.get<any[]>("/patients");
       if (Array.isArray(remotePatients)) {
         // Map backend patient format to frontend Patient model
-        const mapped: Patient[] = remotePatients.map((rp) => ({
-          id: rp.id,
-          hospitalId: authService.getCurrentHospitalId(),
-          firstName: rp.name.split(" ")[0] || "Patient",
-          lastName: rp.name.split(" ").slice(1).join(" ") || "",
-          dateOfBirth: "1995-01-01",
-          age: rp.age || 25,
-          gender: rp.gender || "Other",
-          phone: "+1 (555) 000-0000",
-          email: `${rp.id.toLowerCase()}@patient.foceye.clinic`,
-          address: "Clinical Station Patient Record",
-          emergencyContact: "Primary Care / Clinic Guardian",
-          medicalHistory: `ICD-10: ${rp.icd10 || 'H53.00'}. BCEA: ${rp.bcea_score || 1.0} deg²`,
-          eyeCondition: rp.condition || "General Vision",
-          diagnosis: `${rp.condition || 'General Vision'} (${rp.stage || 'Active Therapy'})`,
-          assignedDoctor: "Dr. Sarah Smith, OD",
-          registrationDate: rp.created_at ? rp.created_at.split("T")[0] : new Date().toISOString().split("T")[0],
-          status: (rp.stage === "Completed" ? "Completed" : "Active") as any,
-          notes: `Adherence: ${rp.adherence || 100}%. Last evaluated: ${rp.last_session || 'Recently'}.`,
-        }));
+        const mapped: Patient[] = remotePatients.map((rp) => {
+          const local = localMap.get(rp.id);
+          const clinicalStatus = rp.clinical_status || local?.clinicalStatus || "EYE_TEST_PENDING";
+          return {
+            id: rp.id,
+            hospitalId: authService.getCurrentHospitalId(),
+            firstName: rp.name.split(" ")[0] || "Patient",
+            lastName: rp.name.split(" ").slice(1).join(" ") || "",
+            dateOfBirth: "1995-01-01",
+            age: rp.age || 25,
+            gender: rp.gender || "Other",
+            phone: "+1 (555) 000-0000",
+            email: `${rp.id.toLowerCase()}@patient.foceye.clinic`,
+            address: "Clinical Station Patient Record",
+            emergencyContact: "Primary Care / Clinic Guardian",
+            medicalHistory: `ICD-10: ${rp.icd10 || 'H53.00'}. BCEA: ${rp.bcea_score || 1.0} deg²`,
+            initialObservation: rp.initial_observation || local?.initialObservation || "",
+            eyeCondition: rp.condition || local?.eyeCondition || "Pending Eye Test",
+            diagnosis: rp.condition ? `${rp.condition} (${rp.stage || 'Active Therapy'})` : local?.diagnosis || "Pending Eye Test",
+            assignedDoctor: "Dr. Sarah Smith, OD",
+            registrationDate: rp.created_at ? rp.created_at.split("T")[0] : (local?.registrationDate || new Date().toISOString().split("T")[0]),
+            status: (rp.stage === "Completed" ? "Completed" : "Active") as any,
+            clinicalStatus: clinicalStatus as any,
+            observedPattern: rp.observed_pattern || local?.observedPattern || "",
+            recommendedTherapyId: rp.recommended_therapy || local?.recommendedTherapyId || "",
+            notes: `Adherence: ${rp.adherence || 100}%. Last evaluated: ${rp.last_session || 'Recently'}.`,
+          };
+        });
 
-        this.setLocalPatients(mapped);
-        return mapped;
+        // Merge any locally created patients not yet in remote
+        const remoteIds = new Set(mapped.map((p) => p.id));
+        const localOnly = localPatients.filter((p) => !remoteIds.has(p.id));
+        const merged = [...localOnly, ...mapped];
+
+        this.setLocalPatients(merged);
+        return merged;
       }
     } catch {
       // Graceful offline fallback
     }
-    return this.getLocalPatients();
+    return localPatients;
   },
 
   async get(id: string): Promise<Patient> {
+    const patients = this.getLocalPatients();
+    const local = patients.find((p) => p.id === id);
+
     try {
       const rp = await ApiClient.get<any>(`/patients/${id}`);
       if (rp && rp.id) {
@@ -89,11 +108,15 @@ export const patientService = {
           address: "Clinical Station Patient Record",
           emergencyContact: "Primary Care / Clinic Guardian (+1 555-0199)",
           medicalHistory: `ICD-10: ${rp.icd10 || 'H53.00'}. BCEA: ${rp.bcea_score || 1.0} deg²`,
-          eyeCondition: rp.condition || "General Vision",
-          diagnosis: rp.condition || "Vision Deficit",
+          initialObservation: rp.initial_observation || local?.initialObservation || "",
+          eyeCondition: rp.condition || local?.eyeCondition || "Pending Eye Test",
+          diagnosis: rp.condition || local?.diagnosis || "Pending Eye Test",
           assignedDoctor: "Dr. Sarah Smith, OD",
-          registrationDate: new Date().toISOString().split("T")[0],
+          registrationDate: local?.registrationDate || new Date().toISOString().split("T")[0],
           status: "Active",
+          clinicalStatus: (rp.clinical_status || local?.clinicalStatus || "EYE_TEST_PENDING") as any,
+          observedPattern: rp.observed_pattern || local?.observedPattern || "",
+          recommendedTherapyId: rp.recommended_therapy || local?.recommendedTherapyId || "",
           notes: `Adherence: ${rp.adherence || 100}%.`,
         };
       }
@@ -101,9 +124,7 @@ export const patientService = {
       // Local fallback
     }
 
-    const patients = this.getLocalPatients();
-    const found = patients.find((p) => p.id === id);
-    if (found) return found;
+    if (local) return local;
     throw new Error(`Patient ${id} not found in database.`);
   },
 
@@ -111,19 +132,23 @@ export const patientService = {
     const currentHospitalId = authService.getCurrentHospitalId();
     let assignedId = `PAT-${Math.floor(1000 + Math.random() * 9000)}`;
 
+    const initialStatus = input.clinicalStatus || "EYE_TEST_PENDING";
+
     // Sync with FastAPI backend first to obtain canonical Supabase UUID
     try {
       const backendRes = await ApiClient.post<any>("/patients", {
         name: `${input.firstName} ${input.lastName}`.trim(),
         age: Number(input.age) || 20,
         gender: input.gender || "Other",
-        condition: input.eyeCondition || "General Vision",
+        condition: input.eyeCondition || "Pending Eye Test",
         icd10: "H53.00",
-        stage: input.status || "Active Therapy",
+        stage: "Eye Test Pending",
         adherence: 100,
         visual_acuity_left: "20/20",
         visual_acuity_right: "20/20",
         bcea_score: 1.0,
+        initial_observation: input.initialObservation || "",
+        clinical_status: initialStatus,
       });
       if (backendRes && backendRes.id) {
         assignedId = backendRes.id;
@@ -138,6 +163,12 @@ export const patientService = {
       hospitalId: input.hospitalId || currentHospitalId,
       registrationDate: new Date().toISOString().split("T")[0],
       status: input.status || "Active",
+      clinicalStatus: initialStatus,
+      eyeCondition: input.eyeCondition || "Pending Eye Test",
+      diagnosis: input.diagnosis || "Pending Eye Test",
+      initialObservation: input.initialObservation || "",
+      observedPattern: input.observedPattern || "",
+      recommendedTherapyId: input.recommendedTherapyId || "",
       age: Number(input.age) || 0,
     };
 
@@ -171,6 +202,10 @@ export const patientService = {
         name: `${updatedData.firstName} ${updatedData.lastName}`.trim(),
         age: updatedData.age,
         condition: updatedData.eyeCondition,
+        clinical_status: updatedData.clinicalStatus,
+        initial_observation: updatedData.initialObservation,
+        observed_pattern: updatedData.observedPattern,
+        recommended_therapy: updatedData.recommendedTherapyId,
       });
     } catch {
       // ignore offline

@@ -82,7 +82,7 @@ const formatDate = (value: Date) =>
 export default function TherapySession() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { selectedPatient } = usePatient();
+  const { selectedPatient, updatePatient } = usePatient();
 
   const isCalibrated = calibrationService.isCalibrated(selectedPatient?.id);
   const latestCalib = calibrationService.getLatestCalibration(selectedPatient?.id);
@@ -378,6 +378,13 @@ export default function TherapySession() {
         doctorNotes: summaryNotes,
         timestamp: (sessionDate ?? new Date()).toISOString(),
       });
+
+      if (selectedPatient) {
+        await updatePatient(selectedPatient.id, {
+          clinicalStatus: "THERAPY_COMPLETED",
+        });
+      }
+
       setSaveReady(true);
     } catch (cause) {
       setSaveError(cause instanceof Error ? cause.message : "Unable to save session.");
@@ -395,6 +402,42 @@ export default function TherapySession() {
           <button onClick={() => navigate("/patients")} className="px-6 py-3 bg-primary text-primary-foreground rounded-xl font-bold">
             Go to Patients
           </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Clinical Workflow Stage-Gate: Baseline eye test and AI analysis required before therapy
+  if (selectedPatient && (selectedPatient.clinicalStatus === "EYE_TEST_PENDING" || selectedPatient.clinicalStatus === "REGISTERED")) {
+    return (
+      <div className="fixed inset-0 bg-background z-50 flex items-center justify-center p-8 font-outfit">
+        <div className="card-soft max-w-lg text-center space-y-5 border border-amber-500/30">
+          <div className="w-16 h-16 rounded-2xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center mx-auto">
+            <Eye size={36} />
+          </div>
+          <div className="space-y-2">
+            <span className="bg-amber-500/10 text-amber-600 dark:text-amber-400 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">
+              Clinical Step 2 Required: Eye Test
+            </span>
+            <h2 className="text-2xl font-bold text-foreground">Baseline Eye Test Required</h2>
+            <p className="text-muted-foreground text-sm leading-relaxed">
+              Clinical protocol requires completion of the standardized camera eye test and AI analysis before starting therapy. This ensures exercises match the patient's actual ocular motor patterns.
+            </p>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-3 justify-center">
+            <button
+              onClick={() => navigate("/vision-test")}
+              className="px-6 py-3.5 bg-primary text-primary-foreground rounded-xl font-bold shadow-lg shadow-primary/20 hover:scale-[1.02] transition-transform flex items-center justify-center gap-2 cursor-pointer"
+            >
+              Start Baseline Eye Test →
+            </button>
+            <button
+              onClick={() => navigate("/dashboard")}
+              className="px-6 py-3.5 bg-muted text-muted-foreground hover:text-foreground rounded-xl font-bold transition-colors cursor-pointer"
+            >
+              Back to Dashboard
+            </button>
+          </div>
         </div>
       </div>
     );

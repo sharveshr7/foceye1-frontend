@@ -16,12 +16,16 @@ export default function TherapySelection() {
       navigate("/patients");
       return;
     }
+    if (selectedPatient.clinicalStatus === "EYE_TEST_PENDING" || selectedPatient.clinicalStatus === "REGISTERED") {
+      navigate("/vision-test");
+      return;
+    }
     if (!isCalibrated) {
       navigate("/calibration");
       return;
     }
     navigate("/therapy-session", {
-      state: { mode, prescribedExerciseId: gameId || "target-tracking", patientId: selectedPatient.id },
+      state: { mode, prescribedExerciseId: gameId || selectedPatient.recommendedTherapyId || "target-tracking", patientId: selectedPatient.id },
     });
   };
 
@@ -29,15 +33,37 @@ export default function TherapySelection() {
     <div className="space-y-10 max-w-5xl mx-auto py-8 font-outfit pb-16">
       <header className="text-center space-y-2">
         <div className="inline-flex items-center gap-2 px-3 py-1 bg-primary/10 text-primary border border-primary/20 rounded-full text-xs font-bold uppercase tracking-wider">
-          <Sparkles size={13} /> Step 3: Therapy Session Delivery
+          <Sparkles size={13} /> Step 4: Therapy Session Delivery
         </div>
         <h1 className="text-4xl font-extrabold text-foreground tracking-tight">Choose Therapy Delivery Mode</h1>
         <p className="text-muted-foreground text-base max-w-2xl mx-auto">
           {selectedPatient
-            ? `Select the tracking hardware for ${selectedPatient.firstName} ${selectedPatient.lastName} (${selectedPatient.eyeCondition}).`
+            ? `Select the tracking hardware for ${selectedPatient.firstName} ${selectedPatient.lastName} (${selectedPatient.observedPattern || selectedPatient.eyeCondition || "General Vision"}).`
             : "Select a patient to begin a supervised neuro-visual rehabilitation session."}
         </p>
       </header>
+
+      {/* Baseline Eye Test Verification Banner */}
+      {selectedPatient && (selectedPatient.clinicalStatus === "EYE_TEST_PENDING" || selectedPatient.clinicalStatus === "REGISTERED") && (
+        <div className="card-soft flex flex-col sm:flex-row items-center justify-between gap-4 p-5 bg-amber-500/10 border-amber-500/30">
+          <div className="flex items-center gap-3 text-left">
+            <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+              <Eye size={22} />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-foreground">Baseline Eye Test Required (Step 2)</p>
+              <p className="text-xs text-muted-foreground">Clinical protocol requires completing the camera eye test and AI analysis before opening visual therapy sessions.</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => navigate("/vision-test")}
+            className="rounded-xl bg-amber-500 hover:bg-amber-600 px-5 py-2.5 text-xs font-bold text-white shadow-md transition-all shrink-0 cursor-pointer"
+          >
+            Start Eye Test Now →
+          </button>
+        </div>
+      )}
 
       {/* Calibration Verification Banner */}
       {selectedPatient && !isCalibrated && (

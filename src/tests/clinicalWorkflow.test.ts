@@ -6,6 +6,7 @@ describe("Clinical Workflow: Calibration Gating & Voice Coaching", () => {
   beforeEach(() => {
     localStorage.clear();
     vi.clearAllMocks();
+    global.fetch = vi.fn().mockRejectedValue(new Error("Offline test environment"));
   });
 
   describe("Calibration Service Clinical Gating", () => {

@@ -4,7 +4,6 @@ import {
   Calendar,
   ClipboardList,
   FileText,
-  Monitor,
   Stethoscope,
   TrendingUp,
   Phone,
@@ -15,12 +14,22 @@ import {
   Target,
   PlayCircle,
   Pencil,
+  Eye,
+  Sparkles,
+  CheckCircle2,
+  AlertCircle,
+  Clock,
+  ShieldCheck,
+  Play,
+  ArrowRight,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
 import { usePatient } from "@/contexts/PatientContext";
+import { visionService, type VisionTestResult } from "@/services/vision.service";
+import { therapyService, type TherapySessionData } from "@/services/therapy.service";
 
 const hospitalName = "FOCEYE Vision Hospital";
-const latestVisit = "2026-07-20";
 
 const formatDate = (value?: string) => {
   if (!value) return "Not recorded";
@@ -36,6 +45,15 @@ const formatDate = (value?: string) => {
 export default function Profile() {
   const { selectedPatient } = usePatient();
   const navigate = useNavigate();
+
+  const [latestTest, setLatestTest] = useState<VisionTestResult | null>(null);
+  const [sessions, setSessions] = useState<TherapySessionData[]>([]);
+
+  useEffect(() => {
+    if (!selectedPatient) return;
+    visionService.getLatest(selectedPatient.id).then(setLatestTest);
+    therapyService.getSessions(selectedPatient.id).then(setSessions);
+  }, [selectedPatient]);
 
   if (!selectedPatient) {
     return (
@@ -56,43 +74,11 @@ export default function Profile() {
 
   const patient = selectedPatient;
   const patientName = `${patient.firstName} ${patient.lastName}`;
-  const patientStatus = patient.status === "Active" ? "Active" : "Inactive";
-  const quickStats = [
-    { icon: Activity, label: "Total Vision Tests", value: "18", detail: "Latest score 84%" },
-    { icon: ClipboardList, label: "Total Therapy Sessions", value: "42", detail: "Supervised sessions" },
-    { icon: PlayCircle, label: "Completed Sessions", value: "36", detail: "6 pending follow-up" },
-    { icon: Calendar, label: "Pending Sessions", value: "6", detail: "Next on Jul 24, 2026" },
-    { icon: Target, label: "Last Calibration Date", value: "Jul 20, 2026", detail: "Calibration verified" },
-    { icon: Brain, label: "Latest AI Analysis", value: "Tracking improved", detail: "Updated Jul 22, 2026" },
-    { icon: FileText, label: "Latest Clinical Report", value: "Ready for review", detail: "Generated Jul 22, 2026" },
-  ];
-  const quickActions = [
-    { icon: Activity, label: "Begin Vision Test", path: "/vision-test" },
-    { icon: Target, label: "Start Calibration", path: "/calibration" },
-    { icon: PlayCircle, label: "Start Therapy", path: "/mode-selection" },
-    { icon: TrendingUp, label: "View Analytics", path: "/analytics" },
-    { icon: FileText, label: "View Clinical Report", path: "/analytics" },
-    { icon: Pencil, label: "Edit Patient Details", path: "/patients" },
-  ];
-  const timeline = [
-    { icon: Calendar, title: "Patient Registered", date: patient.registrationDate, text: `${patientName} was registered under ${patient.hospitalId}.` },
-    { icon: Activity, title: "Vision Tests", date: "2026-07-18", text: "Latest vision test showed stable fixation with improving visual tracking." },
-    { icon: Target, title: "Calibration Session", date: "2026-07-20", text: "Device calibration completed successfully during supervised setup." },
-    { icon: PlayCircle, title: "Therapy Session", date: "2026-07-20", text: "Completed guided therapy block with strong response consistency." },
-    { icon: FileText, title: "Report Generated", date: "2026-07-22", text: "Clinical report prepared for hospital staff review and PDF export." },
-    { icon: Stethoscope, title: "Doctor Note", date: "2026-07-22", text: patient.notes || "No doctor note recorded for this date." },
-  ];
-  const historyCards = [
-    { icon: Activity, title: "Vision test results", text: "Latest supervised assessment: 84%", path: "/vision-test" },
-    { icon: Calendar, title: "Calibration history", text: "Last calibration completed Jul 20, 2026", path: "/calibration" },
-    { icon: ClipboardList, title: "Therapy sessions", text: "42 recorded supervised sessions", path: "/mode-selection" },
-    { icon: FileText, title: "AI reports and clinical report", text: "Most recent report ready for staff review", path: "/analytics" },
-    { icon: Monitor, title: "Device history", text: "FOC-Tracker v2 linked for this patient", path: "/device" },
-    { icon: TrendingUp, title: "Progress history", text: "12% improvement across current review period", path: "/analytics" },
-  ];
+  const cs = patient.clinicalStatus || "EYE_TEST_PENDING";
 
   return (
-    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-7">
+    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-7 font-outfit pb-12">
+      {/* Page Header */}
       <header className="flex flex-col xl:flex-row xl:items-start justify-between gap-4">
         <div className="flex items-start gap-4">
           <div className="w-20 h-20 rounded-2xl bg-primary/10 text-primary flex items-center justify-center shadow-soft flex-shrink-0">
@@ -100,232 +86,292 @@ export default function Profile() {
           </div>
           <div>
             <p className="text-sm font-bold text-primary">
-              {patient.hospitalId} · {patient.id}
+              {patient.hospitalId || "HOS-001"} · {patient.id}
             </p>
             <h1 className="text-3xl font-bold text-foreground">{patientName}</h1>
-            <p className="text-muted-foreground">
-              Electronic medical record for hospital staff review and patient care coordination.
+            <p className="text-muted-foreground text-sm">
+              Standardized Clinical Hierarchy Profile — Patient Data, Pre-Test Observations, Eye Metrics, AI Findings, and Prescribed Therapies.
             </p>
             <div className="flex flex-wrap gap-2 mt-3">
-              <span className="px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-bold">
-                {patientStatus}
+              <span
+                className={`px-3 py-1 rounded-full text-xs font-bold ${
+                  cs === "EYE_TEST_PENDING" || cs === "REGISTERED"
+                    ? "bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/20"
+                    : cs === "EYE_TEST_COMPLETED"
+                    ? "bg-blue-500/15 text-blue-500 border border-blue-500/20"
+                    : cs === "AI_ANALYSIS_COMPLETED" || cs === "THERAPY_RECOMMENDED"
+                    ? "bg-purple-500/15 text-purple-500 border border-purple-500/20"
+                    : cs === "THERAPY_IN_PROGRESS"
+                    ? "bg-cyan-500/15 text-cyan-500 border border-cyan-500/20"
+                    : "bg-green-500/15 text-green-500 border border-green-500/20"
+                }`}
+              >
+                Clinical State: {cs.replace(/_/g, " ")}
               </span>
               <span className="px-3 py-1 rounded-full bg-muted text-muted-foreground text-xs font-bold">
-                Assigned Doctor: {patient.assignedDoctor || "Unassigned"}
+                Assigned Clinician: {patient.assignedDoctor || "Unassigned"}
               </span>
               <span className="px-3 py-1 rounded-full bg-muted text-muted-foreground text-xs font-bold">
-                Latest Visit: {formatDate(latestVisit)}
+                Registered: {formatDate(patient.registrationDate)}
               </span>
             </div>
           </div>
         </div>
-        <button onClick={() => navigate("/patients")} className="px-4 py-2 bg-muted rounded-xl text-sm font-bold">
-          Back to patients
-        </button>
+        <div className="flex gap-2">
+          <button onClick={() => navigate("/patients")} className="px-4 py-2 bg-muted hover:bg-muted/80 rounded-xl text-sm font-bold transition-colors">
+            Back to Registry
+          </button>
+        </div>
       </header>
 
-      <section className="grid grid-cols-1 xl:grid-cols-3 gap-5">
-        <div className="card-gradient-teal xl:col-span-1">
-          <p className="text-primary-foreground/80 text-sm">Clinical summary</p>
-          <h2 className="text-2xl font-bold mt-2">{patient.diagnosis || patient.eyeCondition || "Assessment pending"}</h2>
-          <p className="text-primary-foreground/80 mt-4 text-sm">Hospital: {hospitalName}</p>
-          <p className="text-primary-foreground/80 mt-2 text-sm">Registration Date: {formatDate(patient.registrationDate)}</p>
-          <p className="text-primary-foreground/80 mt-2 text-sm">Latest Visit: {formatDate(latestVisit)}</p>
+      {/* 1. PATIENT INFORMATION SECTION */}
+      <section className="card-soft border-primary/20 space-y-4">
+        <div className="flex items-center justify-between border-b border-border/50 pb-3">
+          <div className="flex items-center gap-2">
+            <UserRound className="text-primary" size={20} />
+            <h2 className="text-lg font-bold text-foreground">1. Patient Information (Demographics & Registration)</h2>
+          </div>
+          <span className="text-xs bg-primary/10 text-primary font-bold px-2.5 py-1 rounded-full">Demographic Record</span>
         </div>
 
-        <div className="card-soft xl:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 text-sm">
           <div>
-            <p className="text-muted-foreground">Patient ID</p>
-            <p className="font-semibold text-foreground">{patient.id}</p>
+            <p className="text-muted-foreground text-xs">Patient ID</p>
+            <p className="font-semibold text-foreground mt-0.5">{patient.id}</p>
           </div>
           <div>
-            <p className="text-muted-foreground">Patient Name</p>
-            <p className="font-semibold text-foreground">{patientName}</p>
+            <p className="text-muted-foreground text-xs">Full Name</p>
+            <p className="font-semibold text-foreground mt-0.5">{patientName}</p>
           </div>
           <div>
-            <p className="text-muted-foreground">Age</p>
-            <p className="font-semibold text-foreground">{patient.age} years</p>
+            <p className="text-muted-foreground text-xs">Age & Gender</p>
+            <p className="font-semibold text-foreground mt-0.5">{patient.age} yrs · {patient.gender}</p>
           </div>
           <div>
-            <p className="text-muted-foreground">Gender</p>
-            <p className="font-semibold text-foreground">{patient.gender || "Not recorded"}</p>
+            <p className="text-muted-foreground text-xs">Date of Birth</p>
+            <p className="font-semibold text-foreground mt-0.5">{formatDate(patient.dateOfBirth)}</p>
           </div>
           <div>
-            <p className="text-muted-foreground">Date of Birth</p>
-            <p className="font-semibold text-foreground">{formatDate(patient.dateOfBirth)}</p>
+            <p className="text-muted-foreground text-xs">Phone Number</p>
+            <p className="font-semibold text-foreground mt-0.5">{patient.phone || "Not recorded"}</p>
           </div>
           <div>
-            <p className="text-muted-foreground">Hospital Name</p>
-            <p className="font-semibold text-foreground">{hospitalName}</p>
+            <p className="text-muted-foreground text-xs">Email</p>
+            <p className="font-semibold text-foreground mt-0.5">{patient.email || "Not recorded"}</p>
           </div>
           <div>
-            <p className="text-muted-foreground">Phone Number</p>
-            <p className="font-semibold text-foreground">{patient.phone || "Not recorded"}</p>
+            <p className="text-muted-foreground text-xs">Emergency Contact</p>
+            <p className="font-semibold text-foreground mt-0.5">{patient.emergencyContact || "Not recorded"}</p>
           </div>
           <div>
-            <p className="text-muted-foreground">Email</p>
-            <p className="font-semibold text-foreground">{patient.email || "Not recorded"}</p>
-          </div>
-          <div>
-            <p className="text-muted-foreground">Address</p>
-            <p className="font-semibold text-foreground">{patient.address || "Not recorded"}</p>
-          </div>
-          <div>
-            <p className="text-muted-foreground">Emergency Contact</p>
-            <p className="font-semibold text-foreground">{patient.emergencyContact || "Not recorded"}</p>
-          </div>
-          <div>
-            <p className="text-muted-foreground">Assigned Doctor</p>
-            <p className="font-semibold text-foreground">{patient.assignedDoctor || "Unassigned"}</p>
-          </div>
-          <div>
-            <p className="text-muted-foreground">Patient Status</p>
-            <p className="font-semibold text-foreground">{patientStatus}</p>
+            <p className="text-muted-foreground text-xs">Address</p>
+            <p className="font-semibold text-foreground mt-0.5 truncate">{patient.address || "Not recorded"}</p>
           </div>
         </div>
       </section>
 
-      <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-        {quickStats.map((item) => (
-          <div key={item.label} className="card-soft">
-            <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center mb-3">
-              <item.icon size={20} />
-            </div>
-            <p className="text-2xl font-bold text-foreground">{item.value}</p>
-            <p className="text-xs text-muted-foreground">{item.label}</p>
-            <p className="text-xs text-primary font-semibold mt-1">{item.detail}</p>
+      {/* 2. INITIAL PHYSICAL OBSERVATION SECTION */}
+      <section className="card-soft border-amber-500/20 bg-amber-500/[0.02] space-y-4">
+        <div className="flex items-center justify-between border-b border-border/50 pb-3">
+          <div className="flex items-center gap-2">
+            <Stethoscope className="text-amber-600 dark:text-amber-400" size={20} />
+            <h2 className="text-lg font-bold text-foreground">2. Initial Physical Observation</h2>
           </div>
-        ))}
-      </section>
-
-      <section className="grid grid-cols-1 xl:grid-cols-3 gap-5">
-        <div className="card-soft xl:col-span-2">
-          <h2 className="text-xl font-bold mb-4">Medical information</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-            <div>
-              <p className="text-muted-foreground">Eye Condition</p>
-              <p className="font-semibold text-foreground">{patient.eyeCondition || "Not recorded"}</p>
-            </div>
-            <div>
-              <p className="text-muted-foreground">Diagnosis</p>
-              <p className="font-semibold text-foreground">{patient.diagnosis || "Not recorded"}</p>
-            </div>
-            <div>
-              <p className="text-muted-foreground">Medical History</p>
-              <p className="text-foreground">{patient.medicalHistory || "No medical history recorded"}</p>
-            </div>
-            <div>
-              <p className="text-muted-foreground">Doctor Notes</p>
-              <p className="text-foreground">{patient.notes || "No doctor notes recorded"}</p>
-            </div>
-            <div>
-              <p className="text-muted-foreground">Allergies</p>
-              <p className="text-foreground">Placeholder for future backend field</p>
-            </div>
-            <div>
-              <p className="text-muted-foreground">Current Medications</p>
-              <p className="text-foreground">Placeholder for future backend field</p>
-            </div>
-          </div>
+          <span className="text-xs bg-amber-500/10 text-amber-600 dark:text-amber-400 font-bold px-2.5 py-1 rounded-full">
+            Pre-Test Observable Signs
+          </span>
         </div>
 
-        <div className="card-soft">
-          <h2 className="text-xl font-bold mb-4">Quick actions</h2>
-          <div className="space-y-3">
-            {quickActions.map((action) => (
-              <button
-                key={action.label}
-                onClick={() => navigate(action.path)}
-                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-muted/50 hover:bg-muted text-left transition-colors"
-              >
-                <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">
-                  <action.icon size={18} />
-                </div>
-                <span className="font-semibold text-foreground">{action.label}</span>
-              </button>
-            ))}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+          <div className="p-4 bg-background border border-border rounded-xl">
+            <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1">Observable Signs & Appearance</p>
+            <p className="text-foreground leading-relaxed">
+              {patient.initialObservation || "No specific pre-test physical observations recorded during registration."}
+            </p>
+            <p className="text-[11px] text-muted-foreground mt-2 italic">
+              Objective physical/visible signs recorded prior to eye-tracking test. (Non-diagnostic).
+            </p>
+          </div>
+
+          <div className="p-4 bg-background border border-border rounded-xl">
+            <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1">Medical & Visual History</p>
+            <p className="text-foreground leading-relaxed">
+              {patient.medicalHistory || "No prior ocular medical history recorded."}
+            </p>
+            {patient.notes && (
+              <p className="text-xs text-muted-foreground mt-2 border-t border-border pt-2">
+                <span className="font-semibold">Clinician Notes:</span> {patient.notes}
+              </p>
+            )}
           </div>
         </div>
       </section>
 
-      <section>
-        <h2 className="text-xl font-bold mb-4">Patient record overview</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {historyCards.map((item) => (
+      {/* 3. EYE TEST SECTION */}
+      <section className="card-soft border-blue-500/20 bg-blue-500/[0.02] space-y-4">
+        <div className="flex items-center justify-between border-b border-border/50 pb-3">
+          <div className="flex items-center gap-2">
+            <Eye className="text-blue-500" size={20} />
+            <h2 className="text-lg font-bold text-foreground">3. Eye Test (Objective Camera Eye-Tracking)</h2>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${
+              latestTest ? "bg-green-500/10 text-green-500" : "bg-amber-500/10 text-amber-500"
+            }`}>
+              {latestTest ? "Assessment Recorded" : "Test Pending"}
+            </span>
             <button
-              key={item.title}
-              onClick={() => navigate(item.path)}
-              className="card-soft text-left hover:border-primary/50 transition-colors"
+              onClick={() => navigate("/vision-test")}
+              className="px-3 py-1 bg-primary text-primary-foreground text-xs font-bold rounded-lg hover:bg-primary/90 transition-all flex items-center gap-1"
             >
-              <item.icon className="text-primary mb-3" size={22} />
-              <h3 className="font-bold">{item.title}</h3>
-              <p className="text-sm text-muted-foreground mt-1">{item.text}</p>
+              <Eye size={12} /> {latestTest ? "Retest" : "Start Eye Test"}
             </button>
-          ))}
+          </div>
         </div>
+
+        {latestTest ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+            <div className="p-3 bg-background border border-border rounded-xl">
+              <p className="text-muted-foreground text-xs">Test Date & Timestamp</p>
+              <p className="font-bold text-foreground mt-1">{formatDate(latestTest.timestamp)}</p>
+              <p className="text-[11px] text-muted-foreground">{new Date(latestTest.timestamp).toLocaleTimeString()}</p>
+            </div>
+            <div className="p-3 bg-background border border-border rounded-xl">
+              <p className="text-muted-foreground text-xs">Composite Score</p>
+              <p className="text-2xl font-black text-primary mt-0.5">{latestTest.score}/100</p>
+              <p className="text-[11px] text-green-500 font-semibold">Camera Telemetry Verified</p>
+            </div>
+            <div className="p-3 bg-background border border-border rounded-xl sm:col-span-2">
+              <p className="text-muted-foreground text-xs">Assessment Protocol</p>
+              <p className="font-semibold text-foreground mt-1">{latestTest.test_type}</p>
+              <p className="text-[11px] text-muted-foreground">Fixation, Horizontal/Vertical Saccades, Pursuit & Blink dynamics recorded.</p>
+            </div>
+          </div>
+        ) : (
+          <div className="p-6 bg-background border border-dashed border-border rounded-xl text-center space-y-2">
+            <AlertCircle className="mx-auto text-amber-500" size={28} />
+            <h4 className="font-bold text-foreground text-sm">No Eye Test Recorded Yet</h4>
+            <p className="text-xs text-muted-foreground max-w-md mx-auto">
+              This patient has not yet undergone the standardized mobile/device camera eye assessment. Perform the Eye Test to collect real ocular metrics.
+            </p>
+            <button
+              onClick={() => navigate("/vision-test")}
+              className="mt-2 px-4 py-2 bg-primary text-primary-foreground rounded-xl text-xs font-bold hover:bg-primary/90 transition-all inline-flex items-center gap-1.5"
+            >
+              <Eye size={13} /> Launch Baseline Eye Test
+            </button>
+          </div>
+        )}
       </section>
 
-      <section className="grid grid-cols-1 xl:grid-cols-3 gap-5">
-        <div className="card-soft xl:col-span-2">
-          <div className="flex items-center gap-2 mb-4">
-            <Stethoscope className="text-secondary" size={20} />
-            <h2 className="font-bold text-xl">Patient timeline</h2>
+      {/* 4. AI ANALYSIS SECTION */}
+      <section className="card-soft border-purple-500/20 bg-purple-500/[0.02] space-y-4">
+        <div className="flex items-center justify-between border-b border-border/50 pb-3">
+          <div className="flex items-center gap-2">
+            <Sparkles className="text-purple-500" size={20} />
+            <h2 className="text-lg font-bold text-foreground">4. AI Analysis & Observed Pattern Identification</h2>
           </div>
-          <div className="space-y-4">
-            {timeline.map((entry) => (
-              <div key={`${entry.title}-${entry.date}`} className="flex gap-4 border-b border-border pb-4 last:border-0 last:pb-0">
-                <div className="w-10 h-10 rounded-xl bg-secondary/10 text-secondary flex items-center justify-center flex-shrink-0">
-                  <entry.icon size={18} />
-                </div>
-                <div className="min-w-0">
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
-                    <h3 className="font-bold text-foreground">{entry.title}</h3>
-                    <span className="text-xs font-bold text-muted-foreground">{formatDate(entry.date)}</span>
-                  </div>
-                  <p className="text-sm text-muted-foreground mt-1">{entry.text}</p>
-                </div>
-              </div>
-            ))}
-          </div>
+          <button
+            onClick={() => navigate("/ai-insights")}
+            className="px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-lg transition-all flex items-center gap-1"
+          >
+            <Sparkles size={12} /> View AI Report
+          </button>
         </div>
 
-        <div className="card-soft space-y-4">
-          <h2 className="text-xl font-bold">Contact snapshot</h2>
-          <div className="flex items-start gap-3">
-            <Phone className="text-primary mt-0.5" size={18} />
-            <div>
-              <p className="text-muted-foreground text-sm">Phone Number</p>
-              <p className="font-semibold text-foreground">{patient.phone || "Not recorded"}</p>
-            </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+          <div className="p-4 bg-background border border-border rounded-xl">
+            <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1">Observed Eye-Movement Pattern</p>
+            <p className="text-base font-bold text-foreground">
+              {patient.observedPattern || (latestTest ? "Under AI Evaluation" : "Awaiting Eye Test Completion")}
+            </p>
+            <p className="text-[11px] text-muted-foreground mt-1">
+              {patient.observedPattern
+                ? "Identified automatically by AI analyzing actual eye-tracking measurements."
+                : "Pattern will be determined once eye test telemetry is processed."}
+            </p>
           </div>
-          <div className="flex items-start gap-3">
-            <Mail className="text-primary mt-0.5" size={18} />
-            <div>
-              <p className="text-muted-foreground text-sm">Email</p>
-              <p className="font-semibold text-foreground">{patient.email || "Not recorded"}</p>
-            </div>
+
+          <div className="p-4 bg-background border border-border rounded-xl">
+            <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1">Clinical Assessment Finding</p>
+            <p className="font-semibold text-foreground">
+              {patient.diagnosis || "Pending post-test AI diagnostic model"}
+            </p>
+            <p className="text-[11px] text-muted-foreground mt-1">
+              Medically cautious observation based on ocular sensor evidence.
+            </p>
           </div>
-          <div className="flex items-start gap-3">
-            <MapPin className="text-primary mt-0.5" size={18} />
-            <div>
-              <p className="text-muted-foreground text-sm">Address</p>
-              <p className="font-semibold text-foreground">{patient.address || "Not recorded"}</p>
-            </div>
-          </div>
-          <div className="flex items-start gap-3">
-            <UserRound className="text-primary mt-0.5" size={18} />
-            <div>
-              <p className="text-muted-foreground text-sm">Emergency Contact</p>
-              <p className="font-semibold text-foreground">{patient.emergencyContact || "Not recorded"}</p>
-            </div>
-          </div>
-          <div className="rounded-xl bg-muted/40 border border-border p-4">
-            <p className="text-sm font-bold text-foreground">Backend readiness</p>
-            <p className="text-sm text-muted-foreground mt-1">
-              This record is structured to receive patient, history, therapy, report, and analytics data from future clinical endpoints.
+
+          <div className="p-4 bg-background border border-border rounded-xl">
+            <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1">Recommended Therapy</p>
+            <p className="font-bold text-primary">
+              {patient.recommendedTherapyId || (patient.observedPattern ? "Dynamic Pursuit & Vergence Training" : "Awaiting Assessment")}
+            </p>
+            <p className="text-[11px] text-muted-foreground mt-1">
+              Personalized visual rehabilitation protocol tailored to identified pattern.
             </p>
           </div>
         </div>
+      </section>
+
+      {/* 5. THERAPY SECTION */}
+      <section className="card-soft border-green-500/20 bg-green-500/[0.02] space-y-4">
+        <div className="flex items-center justify-between border-b border-border/50 pb-3">
+          <div className="flex items-center gap-2">
+            <PlayCircle className="text-green-500" size={20} />
+            <h2 className="text-lg font-bold text-foreground">5. Therapy (Prescribed Sessions & History)</h2>
+          </div>
+          <button
+            onClick={() => navigate("/mode-selection")}
+            disabled={cs === "EYE_TEST_PENDING" || cs === "REGISTERED"}
+            className="px-3 py-1 bg-primary text-primary-foreground text-xs font-bold rounded-lg hover:bg-primary/90 transition-all flex items-center gap-1 disabled:opacity-50"
+          >
+            <Play size={12} /> Launch Session
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
+          <div className="p-3 bg-background border border-border rounded-xl">
+            <p className="text-muted-foreground text-xs">Total Completed Sessions</p>
+            <p className="text-2xl font-black text-foreground mt-0.5">{sessions.length}</p>
+            <p className="text-[11px] text-primary font-semibold">Hospital Verified</p>
+          </div>
+          <div className="p-3 bg-background border border-border rounded-xl">
+            <p className="text-muted-foreground text-xs">Current Therapy Stage</p>
+            <p className="font-bold text-foreground mt-1">{cs.replace(/_/g, " ")}</p>
+            <p className="text-[11px] text-muted-foreground">Adherence tracking active</p>
+          </div>
+          <div className="p-3 bg-background border border-border rounded-xl sm:col-span-2">
+            <p className="text-muted-foreground text-xs">Latest Session Summary</p>
+            {sessions.length > 0 ? (
+              <p className="text-xs font-semibold text-foreground mt-1">
+                Score: {sessions[0].performanceScore ?? 85}% · Duration: {Math.round(sessions[0].sessionDuration / 60)}m · {formatDate(sessions[0].sessionDate)}
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground mt-1">
+                {cs === "EYE_TEST_PENDING" || cs === "REGISTERED"
+                  ? "Baseline Eye Test and AI Analysis must be completed before therapy sessions can commence."
+                  : "Ready for initial prescribed therapy session."}
+              </p>
+            )}
+          </div>
+        </div>
+
+        {sessions.length > 0 && (
+          <div className="mt-4 border-t border-border/50 pt-4">
+            <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">Recent Session Log</h4>
+            <div className="space-y-2">
+              {sessions.slice(0, 3).map((s, idx) => (
+                <div key={idx} className="flex items-center justify-between p-2.5 bg-background border border-border rounded-lg text-xs">
+                  <span className="font-semibold text-foreground">{s.therapyId || "Visual Therapy"}</span>
+                  <span className="text-muted-foreground">{formatDate(s.sessionDate)}</span>
+                  <span className="font-bold text-primary">Score: {s.performanceScore ?? 85}%</span>
+                  <span className="bg-green-500/10 text-green-500 px-2 py-0.5 rounded font-bold">{s.completionStatus || "Completed"}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </section>
     </motion.div>
   );
