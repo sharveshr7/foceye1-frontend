@@ -196,29 +196,29 @@ export default function Patients() {
 
       {/* Metrics Row */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="card-soft flex items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center">
+        <div className="card-interactive flex items-center gap-4 bg-card">
+          <div className="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
             <UserRound size={24} />
           </div>
           <div>
             <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Total Patients</p>
-            <p className="text-2xl font-bold text-foreground">{patients.length}</p>
+            <p className="text-2xl font-black text-foreground">{patients.length}</p>
           </div>
         </div>
-        <div className="card-soft flex items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-green-500/10 text-green-500 flex items-center justify-center">
+        <div className="card-interactive flex items-center gap-4 bg-card">
+          <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center shrink-0">
             <UserCheck size={24} />
           </div>
           <div>
             <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Active Therapy Cases</p>
-            <p className="text-2xl font-bold text-foreground">{activeCount}</p>
+            <p className="text-2xl font-black text-foreground">{activeCount}</p>
           </div>
         </div>
-        <div className="card-soft flex items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-secondary/10 text-secondary flex items-center justify-center">
+        <div className="card-interactive flex items-center gap-4 bg-card">
+          <div className="w-12 h-12 rounded-2xl bg-secondary/10 text-secondary flex items-center justify-center shrink-0">
             <Stethoscope size={24} />
           </div>
-          <div>
+          <div className="truncate">
             <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Selected for Session</p>
             <p className="text-sm font-bold text-foreground truncate max-w-[180px]">
               {selectedPatient ? `${selectedPatient.firstName} ${selectedPatient.lastName}` : "None selected"}

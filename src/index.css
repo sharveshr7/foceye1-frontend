@@ -93,11 +93,19 @@
 @layer components {
   /* Medical Grade Clinical Card */
   .card-soft {
-    @apply bg-card rounded-2xl shadow-soft border border-slate-200/90 dark:border-white/10 p-6 transition-all duration-200;
+    @apply bg-card rounded-2xl shadow-soft border border-slate-200/90 dark:border-white/10 p-6 transition-all duration-300;
+  }
+
+  .card-interactive {
+    @apply bg-card rounded-2xl shadow-soft border border-slate-200/90 dark:border-white/10 p-6 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:border-primary/30 active:scale-[0.99] cursor-pointer;
   }
 
   .glass-morphism {
-    @apply bg-white/90 dark:bg-card/80 backdrop-blur-md border border-slate-200/90 dark:border-white/10 shadow-soft;
+    @apply bg-white/90 dark:bg-card/85 backdrop-blur-xl border border-slate-200/80 dark:border-white/10 shadow-soft-lg;
+  }
+
+  .glass-panel {
+    @apply bg-white/80 dark:bg-slate-900/80 backdrop-blur-2xl border border-white/40 dark:border-white/10 shadow-xl;
   }
 
   .premium-gradient {
@@ -105,24 +113,36 @@
   }
 
   .card-gradient-teal {
-    @apply rounded-2xl p-6 bg-gradient-to-br from-primary to-[hsl(201,96%,28%)] text-primary-foreground border-0 shadow-md shadow-primary/15;
+    @apply rounded-2xl p-6 bg-gradient-to-br from-primary via-cyan-600 to-[hsl(201,96%,28%)] text-primary-foreground border-0 shadow-lg shadow-primary/20 transition-all duration-300 hover:shadow-xl hover:shadow-primary/30;
   }
 
   .card-gradient-purple {
-    @apply rounded-2xl p-6 bg-gradient-to-br from-secondary to-[hsl(175,77%,18%)] text-secondary-foreground border-0 shadow-md shadow-secondary/15;
+    @apply rounded-2xl p-6 bg-gradient-to-br from-secondary via-teal-700 to-[hsl(175,77%,18%)] text-secondary-foreground border-0 shadow-lg shadow-secondary/20 transition-all duration-300 hover:shadow-xl hover:shadow-secondary/30;
+  }
+
+  .glow-primary {
+    box-shadow: 0 0 25px -5px rgba(2, 132, 199, 0.35);
+  }
+
+  .glow-cyan {
+    box-shadow: 0 0 25px -5px rgba(14, 165, 233, 0.4);
+  }
+
+  .glow-emerald {
+    box-shadow: 0 0 25px -5px rgba(16, 185, 129, 0.35);
   }
 
   /* Clinical Status Badges */
   .badge-clinical-normal {
-    @apply inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800/40;
+    @apply inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800/40 shadow-xs transition-colors;
   }
 
   .badge-clinical-attention {
-    @apply inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-800/40;
+    @apply inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-800/40 shadow-xs transition-colors;
   }
 
   .badge-clinical-critical {
-    @apply inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-950/40 dark:text-rose-400 dark:border-rose-800/40;
+    @apply inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-950/40 dark:text-rose-400 dark:border-rose-800/40 shadow-xs transition-colors;
   }
 }
 
@@ -135,6 +155,45 @@
   }
 }
 
+@keyframes pulse-glow {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.6;
+    transform: scale(1.15);
+  }
+}
+
+@keyframes wave-bar {
+  0%, 100% {
+    height: 4px;
+  }
+  50% {
+    height: 24px;
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
 .animate-spin-slow {
   animation: spin-slow 12s linear infinite;
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+.animate-shimmer {
+  background: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.2) 50%, rgba(255,255,255,0) 100%);
+  background-size: 200% 100%;
+  animation: shimmer 3s infinite;
 }

@@ -157,14 +157,18 @@ export default function AIInsights() {
       {/* Header */}
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2 mb-1">
+          <div className="flex items-center gap-2 mb-2 flex-wrap">
             <span className="bg-primary/10 text-primary border border-primary/20 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
               <Sparkles size={12} /> Steps 5 to 8 of Clinical Flow
             </span>
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-blue-500/10 border border-blue-500/30 rounded-full text-xs font-bold text-blue-600 dark:text-blue-400">
+              <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse-glow" />
+              Gemini AI Engine: Active
+            </span>
           </div>
-          <h1 className="text-3xl font-bold text-foreground">FOCEYE AI Diagnostics & Clinical Plan</h1>
+          <h1 className="text-3xl font-black text-foreground tracking-tight">FOCEYE AI Diagnostics & Clinical Plan</h1>
           <p className="text-muted-foreground mt-1 text-sm">
-            Deep-learning ophthalmic analysis and tailored neuro-visual rehabilitation prescriptions powered by Gemini 1.5.
+            Deep-learning ophthalmic analysis and tailored neuro-visual rehabilitation prescriptions powered by Google Gemini AI.
           </p>
         </div>
 
@@ -172,27 +176,27 @@ export default function AIInsights() {
           <button
             onClick={() => setIsReportModalOpen(true)}
             disabled={!diagnosis}
-            className="px-4 py-2.5 bg-secondary/10 hover:bg-secondary/20 text-secondary border border-secondary/20 text-xs font-bold rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
+            className="px-4 py-2.5 bg-secondary/10 hover:bg-secondary/20 text-secondary border border-secondary/20 text-xs font-bold rounded-xl flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50 active:scale-95 shadow-xs"
           >
             <FileText size={14} /> Export Summary (PDF)
           </button>
           <button
             onClick={() => setIsModalOpen(true)}
             disabled={!diagnosis}
-            className="px-4 py-2.5 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 text-xs font-bold rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
+            className="px-4 py-2.5 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 text-xs font-bold rounded-xl flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50 active:scale-95 shadow-xs"
           >
             <Activity size={14} /> Deep-Dive Analytics
           </button>
           <button
             onClick={() => navigate("/vision-test")}
-            className="px-4 py-2.5 bg-muted hover:bg-muted/80 text-foreground text-xs font-semibold rounded-xl border border-border transition-colors cursor-pointer"
+            className="px-4 py-2.5 bg-muted hover:bg-muted/80 text-foreground text-xs font-semibold rounded-xl border border-border transition-all cursor-pointer active:scale-95"
           >
             New Vision Test
           </button>
           <button
             onClick={() => handleStartPrescribedTherapy()}
             disabled={!diagnosis}
-            className="px-6 py-2.5 bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-bold rounded-xl shadow-lg shadow-primary/20 flex items-center gap-2 transition-all hover:scale-105 cursor-pointer disabled:opacity-50"
+            className="px-6 py-2.5 bg-gradient-to-r from-primary to-cyan-600 hover:from-primary/90 hover:to-cyan-700 text-primary-foreground text-xs font-bold rounded-xl shadow-lg shadow-primary/25 flex items-center gap-2 transition-all hover:scale-105 active:scale-95 cursor-pointer disabled:opacity-50"
           >
             <Play size={14} fill="currentColor" /> Start Prescribed Therapy
           </button>
@@ -621,14 +625,14 @@ export default function AIInsights() {
                 <div>
                   <h4 className="font-bold text-foreground text-sm">Clinician Plan Authorization</h4>
                   <p className="text-xs text-muted-foreground">
-                    Prescription calibrated by FOCEYE AI (Gemini 1.5) and ready for immediate clinical execution.
+                    Prescription calibrated by FOCEYE AI (Gemini Flash Engine) and ready for immediate clinical execution.
                   </p>
                 </div>
               </div>
 
               <button
                 onClick={() => handleStartPrescribedTherapy()}
-                className="px-8 py-3.5 bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-sm rounded-2xl shadow-lg shadow-primary/25 transition-all hover:scale-105 flex items-center justify-center gap-2 cursor-pointer shrink-0"
+                className="px-8 py-3.5 bg-gradient-to-r from-primary to-cyan-600 hover:from-primary/90 hover:to-cyan-700 text-primary-foreground font-bold text-sm rounded-2xl shadow-lg shadow-primary/25 transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-2 cursor-pointer shrink-0"
               >
                 <CheckCircle2 size={18} /> Start Therapy →
               </button>
@@ -640,22 +644,22 @@ export default function AIInsights() {
 
       {/* General Clinical Insights Grid */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="card-soft p-5 space-y-1">
+        <div className="card-interactive p-5 space-y-1 bg-card">
           <p className="text-xs font-bold text-muted-foreground uppercase">Tracking Accuracy</p>
           <p className="text-2xl font-extrabold text-primary">{insight?.trackingAccuracy ?? 94}%</p>
           <p className="text-[11px] text-muted-foreground">+3.2% from baseline</p>
         </div>
-        <div className="card-soft p-5 space-y-1">
+        <div className="card-interactive p-5 space-y-1 bg-card">
           <p className="text-xs font-bold text-muted-foreground uppercase">Weekly Trajectory</p>
           <p className="text-2xl font-extrabold text-emerald-500">+{insight?.weeklyImprovementPct ?? 16.5}%</p>
           <p className="text-[11px] text-muted-foreground">Accelerating recovery</p>
         </div>
-        <div className="card-soft p-5 space-y-1">
+        <div className="card-interactive p-5 space-y-1 bg-card">
           <p className="text-xs font-bold text-muted-foreground uppercase">Adherence Score</p>
           <p className="text-2xl font-extrabold text-foreground">{insight?.consistencyScore ?? 92}/100</p>
           <p className="text-[11px] text-muted-foreground">High compliance</p>
         </div>
-        <div className="card-soft p-5 space-y-1">
+        <div className="card-interactive p-5 space-y-1 bg-card">
           <p className="text-xs font-bold text-muted-foreground uppercase">Asthenopia / Fatigue</p>
           <p className="text-2xl font-extrabold text-foreground">{insight?.sessionFatigue ?? "Low"}</p>
           <p className="text-[11px] text-muted-foreground">Well-tolerated sessions</p>

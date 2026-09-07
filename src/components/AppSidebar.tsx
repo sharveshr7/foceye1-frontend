@@ -106,29 +106,29 @@ export function AppSidebar() {
                     onClick={() => navigate(item.path)}
                     aria-current={isActive ? "page" : undefined}
                     title={collapsed ? item.label : undefined}
-                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-150 text-left group relative ${
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 text-left group relative cursor-pointer active:scale-[0.98] ${
                       isActive
-                        ? "bg-primary/10 text-primary font-bold shadow-xs border border-primary/20"
-                        : "text-muted-foreground hover:bg-slate-100/80 dark:hover:bg-slate-800/60 hover:text-foreground font-medium"
+                        ? "bg-gradient-to-r from-primary/15 via-primary/10 to-transparent text-primary font-bold shadow-xs border-l-3 border-l-primary border-y-0 border-r-0 rounded-r-xl rounded-l-none"
+                        : "text-muted-foreground hover:bg-slate-100/80 dark:hover:bg-slate-800/60 hover:text-foreground font-medium hover:translate-x-0.5"
                     }`}
                   >
                     <item.icon
                       size={18}
-                      className={`shrink-0 transition-transform group-hover:scale-105 ${
-                        isActive ? "text-primary" : "text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-300"
+                      className={`shrink-0 transition-all duration-200 group-hover:scale-110 ${
+                        isActive ? "text-primary scale-105" : "text-slate-400 group-hover:text-primary dark:group-hover:text-primary"
                       }`}
                     />
                     {!collapsed && (
-                      <span className="text-xs truncate font-sans tracking-normal flex-1">
+                      <span className="text-xs truncate font-sans tracking-tight flex-1">
                         {item.label}
                       </span>
                     )}
                     {!collapsed && item.badge && (
                       <span
-                        className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md uppercase font-mono ${
+                        className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase font-mono shadow-xs transition-colors ${
                           isActive
                             ? "bg-primary text-primary-foreground"
-                            : "bg-slate-100 dark:bg-slate-800 text-muted-foreground"
+                            : "bg-primary/10 text-primary group-hover:bg-primary/20"
                         }`}
                       >
                         {item.badge}

@@ -830,7 +830,7 @@ export default function VisionTest() {
                     <button
                       onClick={handleSendToAI}
                       disabled={isDiagnosing}
-                      className="w-full py-4 bg-primary hover:bg-primary/90 text-primary-foreground rounded-2xl font-bold text-base shadow-xl shadow-primary/25 transition-all hover:scale-[1.02] flex items-center justify-center gap-2.5 cursor-pointer disabled:opacity-50"
+                      className="w-full py-4 bg-gradient-to-r from-primary to-cyan-600 hover:from-primary/90 hover:to-cyan-700 text-primary-foreground rounded-2xl font-bold text-base shadow-xl shadow-primary/25 transition-all hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-2.5 cursor-pointer disabled:opacity-50"
                     >
                       {isDiagnosing ? (
                         <>
@@ -839,7 +839,7 @@ export default function VisionTest() {
                         </>
                       ) : (
                         <>
-                          <Sparkles size={20} />
+                          <Sparkles size={20} className="animate-pulse" />
                           Send to FOCEYE AI → Generate Personalized Therapy
                         </>
                       )}

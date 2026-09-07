@@ -862,15 +862,51 @@ export default function TherapySession() {
                     </div>
                   </div>
 
+                  {/* Quick Language Selector on Instructions Screen */}
+                  <div className="p-4 bg-card rounded-2xl border border-border/80 shadow-xs space-y-2.5 text-left">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold uppercase tracking-wider text-foreground flex items-center gap-1.5">
+                        <Languages size={14} className="text-primary" /> Voice Guidance Language
+                      </span>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-primary/10 text-primary uppercase">
+                        {voiceCoach.getLanguageOption().name}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-5 gap-1.5">
+                      {SUPPORTED_LANGUAGES.map((lang) => {
+                        const isSelected = therapyLanguage === lang.code;
+                        return (
+                          <button
+                            key={lang.code}
+                            type="button"
+                            onClick={() => {
+                              setTherapyLanguage(lang.code);
+                              voiceCoach.setLanguage(lang.code);
+                            }}
+                            className={`py-2 px-1 rounded-xl border text-center transition-all cursor-pointer flex flex-col items-center justify-center gap-0.5 ${
+                              isSelected
+                                ? "bg-primary/15 border-primary text-primary font-bold shadow-xs scale-[1.03] ring-1 ring-primary/40"
+                                : "bg-muted/40 border-border hover:border-primary/40 text-foreground hover:bg-muted/70"
+                            }`}
+                            title={`${lang.name} (${lang.nativeName})`}
+                          >
+                            <span className="text-base">{lang.flag}</span>
+                            <span className="text-[10px] font-bold truncate max-w-full">{lang.name}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
                   <button
                     onClick={startSetup}
-                    className="w-full py-5 bg-primary text-primary-foreground rounded-2xl font-bold text-xl shadow-xl shadow-primary/20 flex items-center justify-center gap-3 hover:scale-[1.02] transition-transform"
+                    className="w-full py-4.5 bg-gradient-to-r from-primary to-cyan-600 hover:from-primary/90 hover:to-cyan-700 text-primary-foreground rounded-2xl font-bold text-lg shadow-xl shadow-primary/25 flex items-center justify-center gap-3 hover:scale-[1.02] active:scale-95 transition-all cursor-pointer"
                   >
-                    Start Session Setup <ChevronRight size={24} />
+                    Start Session Setup <ChevronRight size={22} />
                   </button>
                   <button
                     onClick={() => setStep("exercise-selection")}
-                    className="w-full py-4 text-muted-foreground font-bold hover:text-foreground transition-colors"
+                    className="w-full py-3 text-muted-foreground font-bold hover:text-foreground transition-colors cursor-pointer text-sm"
                   >
                     Change Therapy
                   </button>
@@ -1048,6 +1084,33 @@ export default function TherapySession() {
                     onMetricUpdate={(m) => setMetrics((prev) => ({ ...prev, ...m }))}
                     onGazePoint={(pt) => setGazePointsHistory((prev) => [...prev.slice(-400), pt])}
                   />
+
+                  {/* Interactive Floating Live Voice Coach & Feedback HUD Banner */}
+                  {isPlaying && countdown === null && (
+                    <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-3 px-4 py-2 bg-slate-950/85 backdrop-blur-xl border border-white/20 rounded-2xl shadow-2xl text-white max-w-lg w-[94%] sm:w-auto animate-fade-in pointer-events-none">
+                      <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-primary/30 text-cyan-300 text-[11px] font-bold shrink-0 border border-cyan-400/30">
+                        <span>{voiceCoach.getLanguageOption().flag}</span>
+                        <span className="hidden sm:inline">{voiceCoach.getLanguageOption().nativeName}</span>
+                      </div>
+
+                      {/* Live Audio Waves Visualizer */}
+                      <div className="flex items-end gap-0.5 h-4 px-1 shrink-0" title="Live Voice Coaching">
+                        <span className="w-1 bg-cyan-400 rounded-full animate-[wave-bar_0.9s_ease-in-out_infinite]" />
+                        <span className="w-1 bg-cyan-400 rounded-full animate-[wave-bar_1.2s_ease-in-out_0.2s_infinite]" />
+                        <span className="w-1 bg-cyan-400 rounded-full animate-[wave-bar_0.7s_ease-in-out_0.4s_infinite]" />
+                        <span className="w-1 bg-cyan-400 rounded-full animate-[wave-bar_1.1s_ease-in-out_0.1s_infinite]" />
+                      </div>
+
+                      <div className="truncate text-xs sm:text-sm font-bold text-slate-100 flex-1">
+                        {metrics.currentInstruction || "Look at the target stimulus"}
+                      </div>
+
+                      <div className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                        <span>{metrics.accuracy}%</span>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Paused Overlay */}
                   {!isPlaying && countdown === null && (
