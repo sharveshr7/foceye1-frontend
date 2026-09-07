@@ -75,7 +75,7 @@ export interface RemoteAIInsightResponse {
   observed_findings?: string[];
   possible_concerns?: string[];
   recommendations?: string[];
-  data_sufficiency?: string;
+  data_sufficiency?: "Sufficient" | "Marginal" | "Insufficient";
   confidence_quality_indicator?: string;
 }
 

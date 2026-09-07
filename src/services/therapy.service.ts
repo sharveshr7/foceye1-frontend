@@ -20,6 +20,18 @@ export interface TherapySessionData {
   repetitions?: number;
 }
 
+export interface BackendTherapySession {
+  id?: string;
+  patient_id?: string;
+  exercise_type?: string;
+  fixation_score?: number;
+  overall_score?: number;
+  saccadic_score?: number;
+  duration_seconds?: number;
+  created_at?: string;
+  clinical_notes?: string;
+}
+
 import { ApiClient } from "./api.client";
 
 const STORAGE_KEY = "foceye_therapy_sessions";

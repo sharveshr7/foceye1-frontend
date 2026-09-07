@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from "react";
+import React, { useRef, useEffect, useState, useMemo } from "react";
 import { Eye, Layers, Compass, Target, Sparkles } from "lucide-react";
 
 export interface GazePoint {

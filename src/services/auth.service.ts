@@ -233,16 +233,16 @@ export const authService = {
     try {
       const remoteUser = await ApiClient.get<Partial<UserProfile> & { clinic_name?: string }>("/auth/me");
       if (remoteUser && remoteUser.email) {
-        const cached = authService.getUser() || {};
+        const cached = authService.getUser();
         const merged: UserProfile = {
-          ...cached,
-          id: remoteUser.id || cached.id || `user_${Date.now()}`,
+          ...(cached || {}),
+          id: remoteUser.id || cached?.id || `user_${Date.now()}`,
           email: remoteUser.email,
-          full_name: remoteUser.full_name || cached.full_name || "",
-          displayName: remoteUser.full_name || cached.displayName || "",
+          full_name: remoteUser.full_name || cached?.full_name || "",
+          displayName: remoteUser.full_name || cached?.displayName || "",
           role: remoteUser.role || "clinician",
           clinic_name: remoteUser.clinic_name,
-          hospital_name: remoteUser.clinic_name || cached.hospital_name || "FOCEYE Vision Hospital",
+          hospital_name: remoteUser.clinic_name || cached?.hospital_name || "FOCEYE Vision Hospital",
         };
         localStorage.setItem("foceye_user", JSON.stringify(merged));
         return merged;

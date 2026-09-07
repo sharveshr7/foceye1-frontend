@@ -310,10 +310,12 @@ export default function HomeTherapy() {
               {/* Front Camera PiP */}
               <div className="absolute top-3 right-3 w-28 h-20 sm:w-36 sm:h-26 rounded-2xl overflow-hidden border border-white/20 shadow-xl z-30 bg-black/80">
                 <CameraFeed
-                  onFrame={setGazeFrame}
-                  onPermissionChange={setHasCameraPermission}
-                  showMetricsOverlay={false}
-                  facingMode="user"
+                  onEyeTrackingFrame={(frame) => {
+                    setGazeFrame(frame);
+                    setHasCameraPermission(true);
+                  }}
+                  showOverlay={false}
+                  compact={true}
                 />
               </div>
             </div>
