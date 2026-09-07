@@ -60,14 +60,27 @@ export default function Patients() {
   } = usePatient();
   const navigate = useNavigate();
 
+  type ClinicalStageFilter = "ALL" | "EYE_TEST_PENDING" | "AI_PENDING" | "THERAPY_ACTIVE" | "COMPLETED";
+
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"All" | "Active" | "Archived">("Active");
+  const [stageFilter, setStageFilter] = useState<ClinicalStageFilter>("ALL");
   const [editing, setEditing] = useState<Patient | undefined>();
   const [form, setForm] = useState<PatientInput>(blankForm);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [reportPatient, setReportPatient] = useState<Patient | null>(null);
   const [isReportOpen, setIsReportOpen] = useState(false);
+
+  const stageCounts = useMemo(() => {
+    return {
+      all: patients.length,
+      testPending: patients.filter((p) => !p.clinicalStatus || p.clinicalStatus === "EYE_TEST_PENDING" || p.clinicalStatus === "REGISTERED").length,
+      aiPending: patients.filter((p) => p.clinicalStatus === "EYE_TEST_COMPLETED").length,
+      therapyActive: patients.filter((p) => p.clinicalStatus === "AI_ANALYSIS_COMPLETED" || p.clinicalStatus === "THERAPY_RECOMMENDED" || p.clinicalStatus === "THERAPY_IN_PROGRESS").length,
+      completed: patients.filter((p) => p.clinicalStatus === "THERAPY_COMPLETED").length,
+    };
+  }, [patients]);
 
   const filteredPatients = useMemo(() => {
     return patients.filter((patient) => {
@@ -76,9 +89,22 @@ export default function Patients() {
         .includes(query.toLowerCase());
       const matchesStatus =
         statusFilter === "All" || (patient.status || "Active") === statusFilter;
-      return matchesQuery && matchesStatus;
+      
+      const cs = patient.clinicalStatus || "EYE_TEST_PENDING";
+      let matchesStage = true;
+      if (stageFilter === "EYE_TEST_PENDING") {
+        matchesStage = cs === "EYE_TEST_PENDING" || cs === "REGISTERED";
+      } else if (stageFilter === "AI_PENDING") {
+        matchesStage = cs === "EYE_TEST_COMPLETED";
+      } else if (stageFilter === "THERAPY_ACTIVE") {
+        matchesStage = cs === "AI_ANALYSIS_COMPLETED" || cs === "THERAPY_RECOMMENDED" || cs === "THERAPY_IN_PROGRESS";
+      } else if (stageFilter === "COMPLETED") {
+        matchesStage = cs === "THERAPY_COMPLETED";
+      }
+
+      return matchesQuery && matchesStatus && matchesStage;
     });
-  }, [patients, query, statusFilter]);
+  }, [patients, query, statusFilter, stageFilter]);
 
   const startCreate = () => {
     setEditing(undefined);
@@ -236,33 +262,92 @@ export default function Patients() {
           }`}
         >
           {/* Filter Bar */}
-          <div className="p-4 border-b border-border flex flex-col sm:flex-row gap-3 items-center justify-between">
-            <div className="relative w-full sm:w-80">
-              <Search size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-              <input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search patient, ID, condition, or doctor..."
-                className="w-full pl-10 pr-4 py-2.5 bg-muted/40 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
-              />
+          <div className="p-4 border-b border-border space-y-3">
+            <div className="flex flex-col sm:flex-row gap-3 items-center justify-between">
+              <div className="relative w-full sm:w-80">
+                <Search size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Search patient, ID, condition, or doctor..."
+                  className="w-full pl-10 pr-4 py-2 bg-muted/40 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                />
+              </div>
+              <div className="flex items-center gap-1.5 self-end sm:self-auto">
+                <span className="text-xs text-muted-foreground font-semibold mr-1 flex items-center gap-1">
+                  <Filter size={14} /> Record:
+                </span>
+                {(["All", "Active", "Archived"] as const).map((status) => (
+                  <button
+                    key={status}
+                    onClick={() => setStatusFilter(status)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                      statusFilter === status
+                        ? "bg-primary text-primary-foreground shadow"
+                        : "bg-muted/60 text-muted-foreground hover:bg-muted"
+                    }`}
+                  >
+                    {status} {status === "Active" ? `(${activeCount})` : status === "Archived" ? `(${archivedCount})` : ""}
+                  </button>
+                ))}
+              </div>
             </div>
-            <div className="flex items-center gap-1.5 self-end sm:self-auto">
-              <span className="text-xs text-muted-foreground font-semibold mr-1 flex items-center gap-1">
-                <Filter size={14} /> Status:
+
+            {/* Secondary Clinical Pipeline Tabs */}
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs">
+              <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider shrink-0 mr-1">
+                Pipeline Stage:
               </span>
-              {(["All", "Active", "Archived"] as const).map((status) => (
-                <button
-                  key={status}
-                  onClick={() => setStatusFilter(status)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                    statusFilter === status
-                      ? "bg-primary text-primary-foreground shadow"
-                      : "bg-muted/60 text-muted-foreground hover:bg-muted"
-                  }`}
-                >
-                  {status} {status === "Active" ? `(${activeCount})` : status === "Archived" ? `(${archivedCount})` : ""}
-                </button>
-              ))}
+              <button
+                onClick={() => setStageFilter("ALL")}
+                className={`px-3 py-1 rounded-lg font-bold shrink-0 transition-all ${
+                  stageFilter === "ALL"
+                    ? "bg-foreground text-background shadow-sm"
+                    : "bg-muted/50 text-muted-foreground hover:bg-muted"
+                }`}
+              >
+                All Stages ({stageCounts.all})
+              </button>
+              <button
+                onClick={() => setStageFilter("EYE_TEST_PENDING")}
+                className={`px-3 py-1 rounded-lg font-bold shrink-0 transition-all flex items-center gap-1 ${
+                  stageFilter === "EYE_TEST_PENDING"
+                    ? "bg-amber-500 text-white shadow-sm"
+                    : "bg-amber-500/10 text-amber-600 dark:text-amber-400 hover:bg-amber-500/20"
+                }`}
+              >
+                <Eye size={12} /> Test Pending ({stageCounts.testPending})
+              </button>
+              <button
+                onClick={() => setStageFilter("AI_PENDING")}
+                className={`px-3 py-1 rounded-lg font-bold shrink-0 transition-all flex items-center gap-1 ${
+                  stageFilter === "AI_PENDING"
+                    ? "bg-blue-500 text-white shadow-sm"
+                    : "bg-blue-500/10 text-blue-500 hover:bg-blue-500/20"
+                }`}
+              >
+                <Sparkles size={12} /> AI Ready ({stageCounts.aiPending})
+              </button>
+              <button
+                onClick={() => setStageFilter("THERAPY_ACTIVE")}
+                className={`px-3 py-1 rounded-lg font-bold shrink-0 transition-all flex items-center gap-1 ${
+                  stageFilter === "THERAPY_ACTIVE"
+                    ? "bg-purple-500 text-white shadow-sm"
+                    : "bg-purple-500/10 text-purple-500 hover:bg-purple-500/20"
+                }`}
+              >
+                <Activity size={12} /> In Therapy ({stageCounts.therapyActive})
+              </button>
+              <button
+                onClick={() => setStageFilter("COMPLETED")}
+                className={`px-3 py-1 rounded-lg font-bold shrink-0 transition-all flex items-center gap-1 ${
+                  stageFilter === "COMPLETED"
+                    ? "bg-emerald-500 text-white shadow-sm"
+                    : "bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20"
+                }`}
+              >
+                <CheckCircle2 size={12} /> Completed ({stageCounts.completed})
+              </button>
             </div>
           </div>
 
@@ -338,28 +423,49 @@ export default function Patients() {
                           {(() => {
                             let badgeClass = "bg-muted text-muted-foreground";
                             let badgeText = "Registered";
+                            let stepProgress = 1;
 
                             if (cs === "EYE_TEST_PENDING" || cs === "REGISTERED") {
                               badgeClass = "bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20";
                               badgeText = "Eye Test Pending";
+                              stepProgress = 1;
                             } else if (cs === "EYE_TEST_COMPLETED") {
                               badgeClass = "bg-blue-500/10 text-blue-500 border border-blue-500/20";
                               badgeText = "Analysis Pending";
+                              stepProgress = 2;
                             } else if (cs === "AI_ANALYSIS_COMPLETED" || cs === "THERAPY_RECOMMENDED") {
                               badgeClass = "bg-purple-500/10 text-purple-500 border border-purple-500/20";
                               badgeText = "Therapy Recommended";
+                              stepProgress = 3;
                             } else if (cs === "THERAPY_IN_PROGRESS") {
                               badgeClass = "bg-cyan-500/10 text-cyan-500 border border-cyan-500/20";
                               badgeText = "Therapy In Progress";
+                              stepProgress = 4;
                             } else if (cs === "THERAPY_COMPLETED") {
                               badgeClass = "bg-green-500/10 text-green-500 border border-green-500/20";
                               badgeText = "Therapy Completed";
+                              stepProgress = 5;
                             }
 
                             return (
-                              <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full whitespace-nowrap ${badgeClass}`}>
-                                {badgeText}
-                              </span>
+                              <div className="space-y-1.5">
+                                <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full whitespace-nowrap inline-block ${badgeClass}`}>
+                                  {badgeText}
+                                </span>
+                                <div className="flex items-center gap-1" title={`Pipeline Stage ${stepProgress} of 5`}>
+                                  {[1, 2, 3, 4, 5].map((s) => (
+                                    <div
+                                      key={s}
+                                      className={`h-1.5 rounded-full transition-all ${
+                                        s <= stepProgress ? "w-3 bg-primary" : "w-1.5 bg-muted-foreground/30"
+                                      }`}
+                                    />
+                                  ))}
+                                  <span className="text-[10px] text-muted-foreground font-bold ml-1">
+                                    {stepProgress}/5
+                                  </span>
+                                </div>
+                              </div>
                             );
                           })()}
                         </td>

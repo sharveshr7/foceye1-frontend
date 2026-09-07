@@ -29,6 +29,11 @@ import {
   Save,
   Database,
   LogOut,
+  Volume2,
+  Wifi,
+  Radio,
+  Play,
+  Activity,
 } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
@@ -43,6 +48,7 @@ import { authService } from "@/services/auth.service";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { DataBackupModal } from "@/components/settings/DataBackupModal";
+import { voiceCoach, type SupportedLanguage, SUPPORTED_LANGUAGES } from "@/utils/voiceCoach";
 
 function Toggle({ on, onToggle }: { on: boolean; onToggle: () => void }) {
   return (
@@ -170,6 +176,59 @@ export default function SettingsPage() {
   const [autoConnect, setAutoConnect] = useState(true);
   const [cameraEnabled, setCameraEnabled] = useState(true);
   const [twoFactor, setTwoFactor] = useState(false);
+
+  // Audio & Voice Coach Settings
+  const [voiceLanguage, setVoiceLanguage] = useState<SupportedLanguage>(voiceCoach.getLanguage());
+  const [voiceVolume, setVoiceVolume] = useState<number>(Math.round(voiceCoach.getVolume() * 100));
+  const [voiceRate, setVoiceRate] = useState<number>(voiceCoach.getRate());
+  const [isVoiceTesting, setIsVoiceTesting] = useState(false);
+
+  // Telemetry Ping State
+  const [isPinging, setIsPinging] = useState(false);
+  const [pingResult, setPingResult] = useState<{
+    status: string;
+    activeConnections: number;
+    totalStreamed: number;
+    latencyMs: number;
+  } | null>(null);
+
+  const handleTestVoice = () => {
+    setIsVoiceTesting(true);
+    voiceCoach.speakPrompt("look_straight", true);
+    setTimeout(() => setIsVoiceTesting(false), 1500);
+  };
+
+  const handlePingTelemetry = async () => {
+    setIsPinging(true);
+    const start = performance.now();
+    try {
+      const res = await fetch("http://127.0.0.1:8000/api/v1/telemetry/stats");
+      const elapsed = Math.round(performance.now() - start);
+      if (res.ok) {
+        const data = await res.json();
+        setPingResult({
+          status: data.status,
+          activeConnections: data.active_websocket_connections,
+          totalStreamed: data.total_gazepoints_streamed,
+          latencyMs: elapsed,
+        });
+        toast.success(`Telemetry gateway online (${elapsed}ms)`);
+      } else {
+        throw new Error(`HTTP ${res.status}`);
+      }
+    } catch {
+      const elapsed = Math.round(performance.now() - start);
+      setPingResult({
+        status: "offline",
+        activeConnections: 0,
+        totalStreamed: 0,
+        latencyMs: elapsed,
+      });
+      toast.error("Telemetry server unreachable (check backend status)");
+    } finally {
+      setIsPinging(false);
+    }
+  };
 
   // Load Staff
   const fetchStaff = async () => {
@@ -725,8 +784,156 @@ export default function SettingsPage() {
               <option>Never</option>
             </select>
           </SettingRow>
+
+          {/* Live Telemetry Gateway Health Ping Pod */}
+          <div className="pt-3 border-t border-border/50 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Wifi size={16} className="text-primary" />
+                <span className="text-xs font-bold text-foreground uppercase tracking-wider">
+                  Live Telemetry Health Test
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={handlePingTelemetry}
+                disabled={isPinging}
+                className="px-3 py-1.5 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
+              >
+                {isPinging ? <Loader2 size={13} className="animate-spin" /> : <Radio size={13} />}
+                {isPinging ? "Pinging..." : "Ping Telemetry Gateway"}
+              </button>
+            </div>
+
+            {pingResult && (
+              <div className="p-3 bg-muted/30 border border-border rounded-xl text-xs space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Server Connection Status:</span>
+                  <span
+                    className={`font-bold px-2 py-0.5 rounded-md ${
+                      pingResult.status === "ok"
+                        ? "bg-emerald-500/10 text-emerald-500"
+                        : "bg-destructive/10 text-destructive"
+                    }`}
+                  >
+                    {pingResult.status.toUpperCase()} ({pingResult.latencyMs}ms)
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-muted-foreground">
+                  <span>Active WebSocket Sockets:</span>
+                  <span className="font-bold text-foreground">{pingResult.activeConnections} active</span>
+                </div>
+                <div className="flex items-center justify-between text-muted-foreground">
+                  <span>Streamed Gaze Points:</span>
+                  <span className="font-mono font-bold text-primary">{pingResult.totalStreamed.toLocaleString()}</span>
+                </div>
+              </div>
+            )}
+          </div>
         </section>
       </div>
+
+      {/* SECTION 4B: MULTILINGUAL VOICE BIOFEEDBACK PREFERENCES */}
+      <section className="card-soft space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-border/60 pb-3">
+          <div>
+            <h2 className="font-bold text-foreground text-lg flex items-center gap-2">
+              <Volume2 size={20} className="text-primary" /> Multilingual Voice Coaching &amp; Biofeedback Audio
+            </h2>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Configure synthesized speech pacing, volume, and clinical biofeedback guidance across 5 languages.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={handleTestVoice}
+            disabled={isVoiceTesting}
+            className="px-3.5 py-2 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shrink-0 self-start sm:self-auto"
+          >
+            <Play size={13} className={isVoiceTesting ? "animate-pulse text-emerald-500" : ""} />
+            {isVoiceTesting ? "Speaking Sample..." : "Test Voice Prompt"}
+          </button>
+        </div>
+
+        <div className="grid gap-6 md:grid-cols-3">
+          {/* Preferred Language */}
+          <div className="p-4 bg-background border border-border rounded-xl space-y-2">
+            <label className="text-xs font-bold text-foreground uppercase tracking-wider block">
+              Guidance Language
+            </label>
+            <select
+              value={voiceLanguage}
+              onChange={(e) => {
+                const lang = e.target.value as SupportedLanguage;
+                setVoiceLanguage(lang);
+                voiceCoach.setLanguage(lang);
+                toast.success(`Voice language set to ${lang.toUpperCase()}`);
+              }}
+              className="w-full rounded-xl border border-border bg-muted/40 px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+            >
+              {SUPPORTED_LANGUAGES.map((l) => (
+                <option key={l.code} value={l.code}>
+                  {l.flag} {l.name} ({l.nativeName})
+                </option>
+              ))}
+            </select>
+            <p className="text-[11px] text-muted-foreground">
+              Synchronized spoken instructions during eye tests and therapy tracking.
+            </p>
+          </div>
+
+          {/* Voice Volume */}
+          <div className="p-4 bg-background border border-border rounded-xl space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-foreground uppercase tracking-wider">
+                Speech Volume
+              </label>
+              <span className="text-xs font-mono font-bold text-primary">{voiceVolume}%</span>
+            </div>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              value={voiceVolume}
+              onChange={(e) => {
+                const vol = parseInt(e.target.value, 10);
+                setVoiceVolume(vol);
+                voiceCoach.setVolume(vol / 100);
+              }}
+              className="w-full accent-primary h-2 bg-muted rounded-lg cursor-pointer"
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Master clinical audio feedback volume for patient instructions.
+            </p>
+          </div>
+
+          {/* Speech Rate */}
+          <div className="p-4 bg-background border border-border rounded-xl space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-foreground uppercase tracking-wider">
+                Speech Pacing / Rate
+              </label>
+              <span className="text-xs font-mono font-bold text-primary">{voiceRate.toFixed(2)}x</span>
+            </div>
+            <input
+              type="range"
+              min={0.7}
+              max={1.4}
+              step={0.05}
+              value={voiceRate}
+              onChange={(e) => {
+                const rate = parseFloat(e.target.value);
+                setVoiceRate(rate);
+                voiceCoach.setRate(rate);
+              }}
+              className="w-full accent-primary h-2 bg-muted rounded-lg cursor-pointer"
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Calibrated cadence suited for pediatric, geriatric, or concussion patients.
+            </p>
+          </div>
+        </div>
+      </section>
 
       {/* SECTION 5: SECURITY & COMPLIANCE */}
       <section className="card-soft space-y-4">

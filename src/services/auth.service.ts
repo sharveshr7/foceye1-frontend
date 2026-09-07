@@ -85,8 +85,9 @@ export const authService = {
       }
 
       return { access_token: res.access_token, token_type: "bearer", user: userProfile };
-    } catch (err: any) {
-      if (err.message && (err.message.includes("already exists") || err.message.includes("400"))) {
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      if (errMsg.includes("already exists") || errMsg.includes("400")) {
         throw err;
       }
       console.warn("[authService] Backend signup error, falling back to local clinical session:", err);
@@ -134,13 +135,13 @@ export const authService = {
       ApiClient.setToken(res.access_token);
       localStorage.setItem("foceye_user", JSON.stringify(userProfile));
       return { access_token: res.access_token, token_type: "bearer", user: userProfile };
-    } catch (err: any) {
+    } catch (err: unknown) {
       // Propagate explicit authentication rejections
+      const errMsg = err instanceof Error ? err.message : String(err);
       if (
-        err.message &&
-        (err.message.includes("Invalid") ||
-          err.message.includes("credentials") ||
-          err.message.includes("401"))
+        errMsg.includes("Invalid") ||
+        errMsg.includes("credentials") ||
+        errMsg.includes("401")
       ) {
         throw err;
       }
@@ -230,15 +231,15 @@ export const authService = {
     if (!token) return null;
 
     try {
-      const remoteUser = await ApiClient.get<any>("/auth/me");
+      const remoteUser = await ApiClient.get<Partial<UserProfile> & { clinic_name?: string }>("/auth/me");
       if (remoteUser && remoteUser.email) {
         const cached = authService.getUser() || {};
         const merged: UserProfile = {
           ...cached,
-          id: remoteUser.id,
+          id: remoteUser.id || cached.id || `user_${Date.now()}`,
           email: remoteUser.email,
-          full_name: remoteUser.full_name,
-          displayName: remoteUser.full_name,
+          full_name: remoteUser.full_name || cached.full_name || "",
+          displayName: remoteUser.full_name || cached.displayName || "",
           role: remoteUser.role || "clinician",
           clinic_name: remoteUser.clinic_name,
           hospital_name: remoteUser.clinic_name || cached.hospital_name || "FOCEYE Vision Hospital",
@@ -246,8 +247,9 @@ export const authService = {
         localStorage.setItem("foceye_user", JSON.stringify(merged));
         return merged;
       }
-    } catch (err: any) {
-      if (err.message && err.message.includes("401")) {
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      if (errMsg.includes("401")) {
         await authService.logout();
         return null;
       }

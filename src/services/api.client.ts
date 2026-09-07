@@ -43,14 +43,14 @@ export class ApiClient {
     return this.request<T>(endpoint, { method: 'GET' });
   }
 
-  static async post<T>(endpoint: string, body?: any): Promise<T> {
+  static async post<T>(endpoint: string, body?: unknown): Promise<T> {
     return this.request<T>(endpoint, {
       method: 'POST',
       body: body ? JSON.stringify(body) : undefined,
     });
   }
 
-  static async put<T>(endpoint: string, body?: any): Promise<T> {
+  static async put<T>(endpoint: string, body?: unknown): Promise<T> {
     return this.request<T>(endpoint, {
       method: 'PUT',
       body: body ? JSON.stringify(body) : undefined,
@@ -100,7 +100,7 @@ export class ApiClient {
     return response.json();
   }
 
-  static async downloadBlob(endpoint: string, body?: any): Promise<Blob> {
+  static async downloadBlob(endpoint: string, body?: unknown): Promise<Blob> {
     const url = `${this.getBaseUrl()}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',

@@ -22,12 +22,14 @@ import {
   ShieldCheck,
   Play,
   ArrowRight,
+  QrCode,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { usePatient } from "@/contexts/PatientContext";
 import { visionService, type VisionTestResult } from "@/services/vision.service";
 import { therapyService, type TherapySessionData } from "@/services/therapy.service";
+import { HomeTherapyModal } from "@/components/therapy/HomeTherapyModal";
 
 const hospitalName = "FOCEYE Vision Hospital";
 
@@ -48,6 +50,7 @@ export default function Profile() {
 
   const [latestTest, setLatestTest] = useState<VisionTestResult | null>(null);
   const [sessions, setSessions] = useState<TherapySessionData[]>([]);
+  const [isHomeModalOpen, setIsHomeModalOpen] = useState(false);
 
   useEffect(() => {
     if (!selectedPatient) return;
@@ -117,7 +120,14 @@ export default function Profile() {
             </div>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          <button
+            type="button"
+            onClick={() => setIsHomeModalOpen(true)}
+            className="px-4 py-2 bg-teal-500/10 hover:bg-teal-500/20 text-teal-600 dark:text-teal-400 border border-teal-500/30 rounded-xl text-sm font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
+          >
+            <QrCode size={16} /> Home Therapy Pass
+          </button>
           <button onClick={() => navigate("/patients")} className="px-4 py-2 bg-muted hover:bg-muted/80 rounded-xl text-sm font-bold transition-colors">
             Back to Registry
           </button>
@@ -358,7 +368,98 @@ export default function Profile() {
         </div>
 
         {sessions.length > 0 && (
-          <div className="mt-4 border-t border-border/50 pt-4">
+          <div className="mt-4 border-t border-border/50 pt-4 space-y-4">
+            {/* Visual Recovery Sparkline & Trajectory */}
+            <div className="p-4 bg-background border border-border rounded-xl space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <TrendingUp className="text-primary" size={16} />
+                  <h4 className="text-xs font-bold text-foreground uppercase tracking-wider">
+                    Longitudinal Oculomotor Recovery Trajectory
+                  </h4>
+                </div>
+                <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500">
+                  Adaptive Adherence Tracking
+                </span>
+              </div>
+
+              {/* Sparkline Graphic */}
+              {(() => {
+                const scores = [
+                  latestTest?.score ?? 70,
+                  ...sessions.map((s) => s.performanceScore ?? 80).reverse(),
+                ];
+                const maxScore = 100;
+                const minScore = 40;
+                const width = 500;
+                const height = 80;
+                const padding = 20;
+
+                const points = scores.map((score, idx) => {
+                  const x = padding + (idx / Math.max(1, scores.length - 1)) * (width - 2 * padding);
+                  const y = height - padding - ((score - minScore) / (maxScore - minScore)) * (height - 2 * padding);
+                  return { x, y, score };
+                });
+
+                const pathData = points.reduce((acc, pt, idx) => {
+                  return idx === 0 ? `M ${pt.x} ${pt.y}` : `${acc} L ${pt.x} ${pt.y}`;
+                }, "");
+
+                const areaData = `${pathData} L ${points[points.length - 1].x} ${height} L ${points[0].x} ${height} Z`;
+
+                return (
+                  <div className="space-y-2">
+                    <div className="w-full overflow-hidden rounded-lg bg-muted/20 p-2">
+                      <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-20 overflow-visible">
+                        <defs>
+                          <linearGradient id="profileRecoveryGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#2563eb" stopOpacity="0.3" />
+                            <stop offset="100%" stopColor="#2563eb" stopOpacity="0.0" />
+                          </linearGradient>
+                        </defs>
+                        {/* Target 90% guide line */}
+                        <line
+                          x1={padding}
+                          y1={height - padding - ((90 - minScore) / (maxScore - minScore)) * (height - 2 * padding)}
+                          x2={width - padding}
+                          y2={height - padding - ((90 - minScore) / (maxScore - minScore)) * (height - 2 * padding)}
+                          stroke="#10b981"
+                          strokeDasharray="4 4"
+                          strokeWidth="1"
+                          opacity="0.6"
+                        />
+                        {/* Area fill */}
+                        <path d={areaData} fill="url(#profileRecoveryGrad)" />
+                        {/* Line path */}
+                        <path d={pathData} fill="none" stroke="#2563eb" strokeWidth="2.5" strokeLinecap="round" />
+                        {/* Data dots */}
+                        {points.map((pt, i) => (
+                          <g key={i}>
+                            <circle cx={pt.x} cy={pt.y} r="4" className="fill-primary stroke-background stroke-2" />
+                            <text
+                              x={pt.x}
+                              y={pt.y - 7}
+                              textAnchor="middle"
+                              className="text-[10px] fill-muted-foreground font-bold"
+                            >
+                              {pt.score}%
+                            </text>
+                          </g>
+                        ))}
+                      </svg>
+                    </div>
+                    <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                      <span>Baseline Test ({scores[0]}%)</span>
+                      <span className="text-emerald-500 font-semibold flex items-center gap-1">
+                        - - - - 90% Target Clinical Benchmark
+                      </span>
+                      <span>Latest Session ({scores[scores.length - 1]}%)</span>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+
             <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">Recent Session Log</h4>
             <div className="space-y-2">
               {sessions.slice(0, 3).map((s, idx) => (
@@ -373,6 +474,13 @@ export default function Profile() {
           </div>
         )}
       </section>
+
+      {/* Remote Patient Home Practice QR & Access Pass Modal */}
+      <HomeTherapyModal
+        isOpen={isHomeModalOpen}
+        onClose={() => setIsHomeModalOpen(false)}
+        patient={selectedPatient}
+      />
     </motion.div>
   );
 }

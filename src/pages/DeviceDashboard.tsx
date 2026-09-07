@@ -27,13 +27,23 @@ import { ApiClient } from "@/services/api.client";
 
 type ConnectionStatus = "disconnected" | "connecting" | "connected";
 
+interface HardwareDevice {
+  id: string;
+  name?: string;
+  fps?: number;
+  status?: string;
+  battery?: number;
+  connection?: string;
+  firmwareVersion?: string;
+}
+
 export default function DeviceDashboard() {
   const { selectedPatient } = usePatient();
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>("connected");
   const [isAssigned, setIsAssigned] = useState(false);
   const [lastRefreshed, setLastRefreshed] = useState("Just now");
   const [diagnosticMessage, setDiagnosticMessage] = useState("Device status verified healthy.");
-  const [deviceList, setDeviceList] = useState<any[]>([]);
+  const [deviceList, setDeviceList] = useState<HardwareDevice[]>([]);
   const [device, setDevice] = useState({
     id: "FOC-PI5-001",
     name: "FOCEYE Pi-Tracker v2 (RPi 5)",
@@ -47,7 +57,7 @@ export default function DeviceDashboard() {
     let isMounted = true;
     async function loadDevices() {
       try {
-        const list = await ApiClient.get<any[]>("/devices");
+        const list = await ApiClient.get<HardwareDevice[]>("/devices");
         if (isMounted && Array.isArray(list) && list.length > 0) {
           setDeviceList(list);
           const active = list[0];

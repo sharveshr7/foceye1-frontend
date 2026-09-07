@@ -42,10 +42,17 @@ const defaultStatus: CalibrationStatus = {
   last_calibration_date: new Date().toISOString().split("T")[0],
 };
 
+interface BackendCalibrationStatus {
+  accuracy_percentage?: number;
+  camera_status?: string;
+  calibrated_at?: string;
+  rmse_pixels?: number;
+}
+
 export const calibrationService = {
   getStatus: async (): Promise<CalibrationStatus> => {
     try {
-      const res = await ApiClient.get<any>("/calibration/status");
+      const res = await ApiClient.get<BackendCalibrationStatus>("/calibration/status");
       if (res) {
         return {
           status: (res.accuracy_percentage || 0) >= MIN_CALIBRATION_ACCURACY ? "Calibrated" : "Calibration Required",

@@ -227,8 +227,10 @@ export function useGazeTelemetry(
     return () => {
       isMountedRef.current = false;
       stopSimulation();
-      if (reconnectTimeoutRef.current) {
-        clearTimeout(reconnectTimeoutRef.current);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      const currentTimeout = reconnectTimeoutRef.current;
+      if (currentTimeout) {
+        clearTimeout(currentTimeout);
       }
       if (wsRef.current) {
         wsRef.current.close();

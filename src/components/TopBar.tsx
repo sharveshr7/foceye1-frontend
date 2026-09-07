@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Battery, Bell, Search, UserRound, ChevronDown, Check, Sparkles, LogOut, Settings, User } from "lucide-react";
+import { Battery, Bell, Search, UserRound, ChevronDown, Check, Sparkles, LogOut, Settings, User, Eye, Play, FileText } from "lucide-react";
 import { usePatient } from "@/contexts/PatientContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
@@ -30,8 +30,9 @@ export function TopBar() {
     : [];
 
   return (
-    <header className="flex justify-between items-center mb-8 gap-4 px-2 md:px-0 relative z-30">
-      {/* Search Input with Instant Dropdown */}
+    <header className="flex flex-col mb-8 gap-3 px-2 md:px-0 relative z-30">
+      <div className="flex justify-between items-center w-full gap-4">
+        {/* Search Input with Instant Dropdown */}
       <div className="flex-1 max-w-md hidden lg:block relative">
         <div className="relative group">
           <Search
@@ -226,6 +227,97 @@ export function TopBar() {
           )}
         </div>
       </div>
+      </div>
+
+      {/* Row 2: Global Sticky Clinical Progression Breadcrumb Ribbon */}
+      {selectedPatient && (() => {
+        const cs = selectedPatient.clinicalStatus || "EYE_TEST_PENDING";
+        const isEyeTestDone = ["EYE_TEST_COMPLETED", "THERAPY_RECOMMENDED", "THERAPY_IN_PROGRESS", "THERAPY_COMPLETED"].includes(cs);
+        const isAiDone = ["THERAPY_RECOMMENDED", "THERAPY_IN_PROGRESS", "THERAPY_COMPLETED"].includes(cs);
+        const isTherapyDone = cs === "THERAPY_COMPLETED";
+
+        return (
+          <div className="w-full px-4 py-2 bg-card/85 backdrop-blur-xl border border-primary/25 rounded-2xl flex flex-wrap items-center justify-between gap-3 shadow-xs">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+              <span className="text-[11px] font-black uppercase tracking-wider text-muted-foreground hidden sm:inline">Active Patient Flow:</span>
+              <span className="text-xs font-bold text-foreground truncate max-w-[160px] sm:max-w-[220px]">
+                {selectedPatient.firstName} {selectedPatient.lastName} <span className="text-primary font-mono text-[11px]">({selectedPatient.id})</span>
+              </span>
+            </div>
+
+            <div className="flex items-center gap-1 sm:gap-1.5 text-[11px] overflow-x-auto scrollbar-hide">
+              <button
+                onClick={() => navigate("/patients")}
+                className="px-2.5 py-1 rounded-lg bg-primary/10 text-primary font-bold flex items-center gap-1 hover:bg-primary/20 transition-all cursor-pointer"
+                title="Patient Intake & Demographics"
+              >
+                <Check size={12} /> 1. Intake
+              </button>
+
+              <span className="text-muted-foreground/50 text-[10px]">→</span>
+
+              <button
+                onClick={() => navigate("/vision-test")}
+                className={`px-2.5 py-1 rounded-lg font-bold flex items-center gap-1 transition-all cursor-pointer ${
+                  isEyeTestDone
+                    ? "bg-primary/10 text-primary"
+                    : cs === "EYE_TEST_PENDING"
+                    ? "bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 animate-pulse shadow-xs"
+                    : "bg-muted text-muted-foreground"
+                }`}
+                title="Standard 7-Step or VOMS Eye Test"
+              >
+                {isEyeTestDone ? <Check size={12} /> : <Eye size={12} />} 2. Eye Test
+              </button>
+
+              <span className="text-muted-foreground/50 text-[10px]">→</span>
+
+              <button
+                onClick={() => isEyeTestDone && navigate("/ai-insights")}
+                disabled={!isEyeTestDone}
+                className={`px-2.5 py-1 rounded-lg font-bold flex items-center gap-1 transition-all ${
+                  !isEyeTestDone
+                    ? "opacity-40 cursor-not-allowed bg-muted text-muted-foreground"
+                    : isAiDone
+                    ? "bg-primary/10 text-primary cursor-pointer"
+                    : "bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/30 animate-pulse cursor-pointer shadow-xs"
+                }`}
+                title="Gemini Neuro-Visual Diagnosis"
+              >
+                {isAiDone ? <Check size={12} /> : <Sparkles size={12} />} 3. AI Insights
+              </button>
+
+              <span className="text-muted-foreground/50 text-[10px]">→</span>
+
+              <button
+                onClick={() => isAiDone && navigate("/mode-selection")}
+                disabled={!isAiDone}
+                className={`px-2.5 py-1 rounded-lg font-bold flex items-center gap-1 transition-all ${
+                  !isAiDone
+                    ? "opacity-40 cursor-not-allowed bg-muted text-muted-foreground"
+                    : isTherapyDone
+                    ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 cursor-pointer"
+                    : "bg-purple-500/15 text-purple-600 dark:text-purple-400 border border-purple-500/30 animate-pulse cursor-pointer shadow-xs"
+                }`}
+                title="Multi-Language Voice Therapy"
+              >
+                {isTherapyDone ? <Check size={12} /> : <Play size={12} fill="currentColor" />} 4. Therapy
+              </button>
+
+              <span className="text-muted-foreground/50 text-[10px]">→</span>
+
+              <button
+                onClick={() => navigate(`/profile?patientId=${selectedPatient.id}`)}
+                className="px-2.5 py-1 rounded-lg bg-card border border-border text-foreground hover:border-primary/40 font-bold flex items-center gap-1 transition-all cursor-pointer"
+                title="Clinical Dossier & PDF Report"
+              >
+                <FileText size={12} /> 5. Report
+              </button>
+            </div>
+          </div>
+        );
+      })()}
     </header>
   );
 }

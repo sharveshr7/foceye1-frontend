@@ -25,6 +25,8 @@ const AIInsights = lazyWithRetry(() => import("./pages/AIInsights"));
 const TherapySession = lazyWithRetry(() => import("./pages/TherapySession"));
 const Patients = lazyWithRetry(() => import("./pages/Patients"));
 const VisionTest = lazyWithRetry(() => import("./pages/VisionTest"));
+const HomeTherapy = lazyWithRetry(() => import("./pages/HomeTherapy"));
+const TeleObserve = lazyWithRetry(() => import("./pages/TeleObserve"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -51,6 +53,8 @@ const App = () => (
                 <Route path="/" element={<Welcome />} />
                 <Route path="/login" element={<Login />} />
                 <Route path="/signup" element={<Signup />} />
+                <Route path="/home-therapy" element={<HomeTherapy />} />
+                <Route path="/tele-observe/:sessionId?" element={<TeleObserve />} />
                 <Route
                   element={
                     <ProtectedRoute>

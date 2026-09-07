@@ -16,8 +16,10 @@ import {
   Brain,
   ArrowRight,
   Clock,
+  ShieldAlert,
+  Sliders,
 } from "lucide-react";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { usePatient } from "@/contexts/PatientContext";
 import { visionService } from "@/services/vision.service";
@@ -26,6 +28,8 @@ import { CameraFeed } from "@/components/camera/CameraFeed";
 import type { EyeTrackingFrame } from "@/utils/eyeTracker";
 import { calibrationService } from "@/services/calibration.service";
 import { voiceCoach, type VoicePromptKey } from "@/utils/voiceCoach";
+
+export type TestProtocol = "standard" | "voms";
 
 type TestStep =
   | "camera_check"
@@ -36,6 +40,11 @@ type TestStep =
   | "down"
   | "pursuit"
   | "blink"
+  | "voms_pursuit"
+  | "voms_saccade"
+  | "voms_convergence"
+  | "voms_vor"
+  | "voms_vms"
   | "complete";
 
 interface StepConfig {
@@ -98,9 +107,56 @@ const ASSESSMENT_STEPS: StepConfig[] = [
   },
 ];
 
+const VOMS_STEPS: StepConfig[] = [
+  {
+    id: "voms_pursuit",
+    title: "1. Smooth Pursuit Tracking",
+    instruction: "Follow the moving target smoothly without moving your head.",
+    voiceKey: "voms_pursuit",
+    durationMs: 4500,
+  },
+  {
+    id: "voms_saccade",
+    title: "2. Horizontal & Vertical Fast Saccades",
+    instruction: "Quickly alternate your gaze back and forth between the targets.",
+    voiceKey: "voms_saccade",
+    durationMs: 4500,
+  },
+  {
+    id: "voms_convergence",
+    title: "3. Near Point of Convergence (NPC)",
+    instruction: "Focus on the target as it approaches your nose. Report when you see double.",
+    voiceKey: "voms_convergence",
+    durationMs: 4500,
+  },
+  {
+    id: "voms_vor",
+    title: "4. Vestibulo-Ocular Reflex (VOR)",
+    instruction: "Keep your eyes locked on the target while gently turning your head.",
+    voiceKey: "voms_vor",
+    durationMs: 4500,
+  },
+  {
+    id: "voms_vms",
+    title: "5. Visual Motion Sensitivity (VMS)",
+    instruction: "Follow the target with your eyes and head while the background moves.",
+    voiceKey: "voms_vms",
+    durationMs: 4500,
+  },
+];
+
 export default function VisionTest() {
   const navigate = useNavigate();
   const { selectedPatient, updatePatient } = usePatient();
+
+  const [protocol, setProtocol] = useState<TestProtocol>("standard");
+  const [vomsSymptoms, setVomsSymptoms] = useState({
+    headache: 0,
+    dizziness: 0,
+    nausea: 0,
+    fogginess: 0,
+    npcBreakpointCm: 5.5,
+  });
 
   const [step, setStep] = useState<TestStep>("camera_check");
   const [status, setStatus] = useState("Automatic Camera Check");
@@ -139,6 +195,25 @@ export default function VisionTest() {
   const stepStartTimeRef = useRef(performance.now());
   const hasSpokenStepRef = useRef<string | null>(null);
 
+  const isVomsPositive = useMemo(() => {
+    return (
+      vomsSymptoms.headache >= 2 ||
+      vomsSymptoms.dizziness >= 2 ||
+      vomsSymptoms.nausea >= 2 ||
+      vomsSymptoms.fogginess >= 2 ||
+      vomsSymptoms.npcBreakpointCm > 5.0
+    );
+  }, [vomsSymptoms]);
+
+  const maxVomsScore = useMemo(() => {
+    return Math.max(
+      vomsSymptoms.headache,
+      vomsSymptoms.dizziness,
+      vomsSymptoms.nausea,
+      vomsSymptoms.fogginess
+    );
+  }, [vomsSymptoms]);
+
   // Speak initial instruction on camera check mount
   useEffect(() => {
     if (step === "camera_check") {
@@ -150,7 +225,8 @@ export default function VisionTest() {
   // Voice instruction trigger whenever step advances
   useEffect(() => {
     if (step !== "camera_check" && step !== "complete") {
-      const stepConf = ASSESSMENT_STEPS.find((s) => s.id === step);
+      const activeSteps = protocol === "voms" ? VOMS_STEPS : ASSESSMENT_STEPS;
+      const stepConf = activeSteps.find((s) => s.id === step);
       if (stepConf && hasSpokenStepRef.current !== step) {
         hasSpokenStepRef.current = step;
         voiceCoach.speakPrompt(stepConf.voiceKey, true);
@@ -159,7 +235,7 @@ export default function VisionTest() {
         sampledFramesRef.current = [];
       }
     }
-  }, [step]);
+  }, [step, protocol]);
 
   // Handle incoming eye tracking frame from front camera
   const handleFrame = (frame: EyeTrackingFrame) => {
@@ -193,20 +269,26 @@ export default function VisionTest() {
           }
           voiceCoach.goodShort(true);
           setTimeout(() => {
-            setStep("straight");
-            setStatus("Eye Movement Assessment");
+            setStep(protocol === "voms" ? "voms_pursuit" : "straight");
+            setStatus(protocol === "voms" ? "VOMS Concussion Neuro-Screening" : "Eye Movement Assessment");
           }, 600);
         }
       }
     }
   };
 
+  const advanceAssessmentStepRef = useRef<() => void>(() => {});
+  useEffect(() => {
+    advanceAssessmentStepRef.current = advanceAssessmentStep;
+  });
+
   // Step countdown timer for automatic pacing during assessment
   useEffect(() => {
     if (step === "camera_check" || step === "complete") return;
 
     const interval = setInterval(() => {
-      const stepConf = ASSESSMENT_STEPS.find((s) => s.id === step);
+      const activeSteps = protocol === "voms" ? VOMS_STEPS : ASSESSMENT_STEPS;
+      const stepConf = activeSteps.find((s) => s.id === step);
       if (!stepConf) return;
 
       const elapsed = performance.now() - stepStartTimeRef.current;
@@ -214,12 +296,12 @@ export default function VisionTest() {
       setStepTimeLeftMs(remaining);
 
       if (remaining <= 0) {
-        advanceAssessmentStep();
+        advanceAssessmentStepRef.current();
       }
     }, 150);
 
     return () => clearInterval(interval);
-  }, [step]);
+  }, [step, protocol]);
 
   const advanceAssessmentStep = () => {
     const samples = sampledFramesRef.current;
@@ -235,13 +317,14 @@ export default function VisionTest() {
       );
       const latest = samples[samples.length - 1];
 
-      if (step === "straight") {
+      if (step === "straight" || step === "voms_pursuit") {
         setMetrics((prev) => ({
           ...prev,
           fixationScore: Math.max(50, avgFixation),
           bceaDeg2: avgBcea,
+          pursuitGain: avgGain,
         }));
-      } else if (step === "right" || step === "left") {
+      } else if (step === "right" || step === "left" || step === "voms_saccade") {
         const xs = samples.map((f) => f.gazeX);
         const xSpan = Math.max(...xs) - Math.min(...xs);
         const measuredH = Math.round(Math.max(25, xSpan * 55));
@@ -258,7 +341,7 @@ export default function VisionTest() {
           ...prev,
           verticalGazeRangeDeg: measuredV,
         }));
-      } else if (step === "pursuit") {
+      } else if (step === "pursuit" || step === "voms_vms") {
         setMetrics((prev) => ({
           ...prev,
           pursuitGain: avgGain,
@@ -270,16 +353,23 @@ export default function VisionTest() {
           incompleteBlinkPct: latest.incompleteBlinkRatio,
           pupilDiameterMm: latest.leftEye.diameterMm,
         }));
+      } else if (step === "voms_convergence") {
+        setMetrics((prev) => ({
+          ...prev,
+          convergenceNpcCm: vomsSymptoms.npcBreakpointCm,
+          convergenceScore: vomsSymptoms.npcBreakpointCm <= 5.0 ? 92 : 65,
+        }));
       }
     }
 
-    const currentIdx = ASSESSMENT_STEPS.findIndex((s) => s.id === step);
-    if (currentIdx !== -1 && currentIdx < ASSESSMENT_STEPS.length - 1) {
-      const nextStepId = ASSESSMENT_STEPS[currentIdx + 1].id;
+    const activeSteps = protocol === "voms" ? VOMS_STEPS : ASSESSMENT_STEPS;
+    const currentIdx = activeSteps.findIndex((s) => s.id === step);
+    if (currentIdx !== -1 && currentIdx < activeSteps.length - 1) {
+      const nextStepId = activeSteps[currentIdx + 1].id;
       setStep(nextStepId);
     } else {
       setStep("complete");
-      setStatus("Assessment Completed");
+      setStatus(protocol === "voms" ? "VOMS Concussion Screen Complete" : "Assessment Completed");
       voiceCoach.sessionComplete();
     }
   };
@@ -321,22 +411,37 @@ export default function VisionTest() {
         convergenceScore: metrics.convergenceScore,
         fixationBCEADeg2: metrics.bceaDeg2,
         pursuitGain: metrics.pursuitGain,
-        convergenceNpcCm: metrics.convergenceNpcCm,
+        convergenceNpcCm: protocol === "voms" ? vomsSymptoms.npcBreakpointCm : metrics.convergenceNpcCm,
         blinkRateBpm: metrics.blinkRateBpm,
         incompleteBlinkPct: metrics.incompleteBlinkPct,
         horizontalGazeRangeDeg,
         verticalGazeRangeDeg,
         totalFramesSampled,
         notes: selectedPatient.notes,
+        vomsScores:
+          protocol === "voms"
+            ? {
+                headache: vomsSymptoms.headache,
+                dizziness: vomsSymptoms.dizziness,
+                nausea: vomsSymptoms.nausea,
+                fogginess: vomsSymptoms.fogginess,
+                npcCm: vomsSymptoms.npcBreakpointCm,
+                isPositive: isVomsPositive,
+                provocationDelta: maxVomsScore,
+              }
+            : undefined,
       };
 
       const diagnosisData = await aiService.diagnoseAndPrescribe(payload);
 
       await visionService.submitResult(selectedPatient.id, {
         score: compositeScore,
-        test_type: "Standardized Computer Vision Assessment",
+        test_type: protocol === "voms" ? "VOMS Concussion Neuro-Screening" : "Standardized Computer Vision Assessment",
         timestamp: new Date().toISOString(),
-        metrics,
+        metrics: {
+          ...metrics,
+          ...(protocol === "voms" ? { voms: vomsSymptoms, isVomsPositive } : {}),
+        },
       });
 
       if (selectedPatient) {
@@ -424,8 +529,16 @@ export default function VisionTest() {
       <header className="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-4">
         <div>
           <div className="flex flex-wrap items-center gap-2 mb-1">
-            <span className="bg-primary/10 text-primary border border-primary/20 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">
-              {step === "camera_check" ? "Automatic Camera Check" : "Standardized Eye Assessment"}
+            <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border ${
+              protocol === "voms"
+                ? "bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/30"
+                : "bg-primary/10 text-primary border-primary/20"
+            }`}>
+              {step === "camera_check"
+                ? "Automatic Camera Check"
+                : protocol === "voms"
+                ? "Concussion / VOMS Screening"
+                : "Standardized Eye Assessment"}
             </span>
             {isCamVerified && (
               <span className="bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
@@ -433,14 +546,55 @@ export default function VisionTest() {
               </span>
             )}
           </div>
-          <h1 className="text-3xl font-bold text-foreground">Precision Eye Movement Assessment</h1>
+          <h1 className="text-3xl font-bold text-foreground">
+            {protocol === "voms" ? "Concussion & Sports Neuro-Screening (VOMS)" : "Precision Eye Movement Assessment"}
+          </h1>
           <p className="text-muted-foreground text-sm">
-            Mobile camera neuro-visual evaluation for {selectedPatient.firstName} {selectedPatient.lastName} ({selectedPatient.id}).
+            {protocol === "voms"
+              ? "Standardized Vestibular / Ocular-Motor Screening protocol measuring symptom provocation & NPC breakpoint."
+              : `Mobile camera neuro-visual evaluation for ${selectedPatient.firstName} ${selectedPatient.lastName} (${selectedPatient.id}).`}
           </p>
         </div>
-        <div className="card-soft bg-card/60">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Status</p>
-          <p className="text-lg font-bold text-primary">{status}</p>
+
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+          {/* Protocol Switcher Tabs */}
+          <div className="flex items-center gap-1.5 p-1 bg-muted/80 rounded-2xl border border-border/80">
+            <button
+              type="button"
+              onClick={() => {
+                if (step === "camera_check" || step === "complete") {
+                  setProtocol("standard");
+                }
+              }}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                protocol === "standard"
+                  ? "bg-card text-foreground shadow-sm font-extrabold"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Eye size={14} /> Standard Vision Test
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (step === "camera_check" || step === "complete") {
+                  setProtocol("voms");
+                }
+              }}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                protocol === "voms"
+                  ? "bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/30 shadow-sm font-extrabold"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <ShieldAlert size={14} /> Concussion / VOMS
+            </button>
+          </div>
+
+          <div className="card-soft bg-card/60">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Status</p>
+            <p className={`text-lg font-bold ${protocol === "voms" ? "text-rose-500" : "text-primary"}`}>{status}</p>
+          </div>
         </div>
       </header>
 
@@ -454,11 +608,17 @@ export default function VisionTest() {
       <div className="flex items-center gap-2 overflow-x-auto pb-2 no-scrollbar">
         {[
           { id: "camera_check", label: "Camera Check" },
-          ...ASSESSMENT_STEPS.map((s) => ({ id: s.id, label: s.title.split(". ")[1] || s.title })),
+          ...(protocol === "voms" ? VOMS_STEPS : ASSESSMENT_STEPS).map((s) => ({
+            id: s.id,
+            label: s.title.split(". ")[1] || s.title,
+          })),
           { id: "complete", label: "Results" },
         ].map((s, idx) => {
           const isCurrent = step === s.id;
-          const order = ["camera_check", "straight", "right", "left", "up", "down", "pursuit", "blink", "complete"];
+          const order =
+            protocol === "voms"
+              ? ["camera_check", "voms_pursuit", "voms_saccade", "voms_convergence", "voms_vor", "voms_vms", "complete"]
+              : ["camera_check", "straight", "right", "left", "up", "down", "pursuit", "blink", "complete"];
           const isPassed = order.indexOf(step) > idx;
 
           return (
@@ -466,7 +626,9 @@ export default function VisionTest() {
               key={s.id}
               className={`px-3 py-2 rounded-2xl border text-center shrink-0 text-xs transition-all ${
                 isCurrent
-                  ? "bg-primary/15 border-primary text-primary font-bold shadow-sm"
+                  ? protocol === "voms"
+                    ? "bg-rose-500/15 border-rose-500 text-rose-600 dark:text-rose-400 font-bold shadow-sm"
+                    : "bg-primary/15 border-primary text-primary font-bold shadow-sm"
                   : isPassed
                   ? "bg-muted/60 border-border text-foreground font-medium"
                   : "bg-muted/20 border-border/40 text-muted-foreground opacity-60"
@@ -781,6 +943,182 @@ export default function VisionTest() {
                 </motion.div>
               )}
 
+              {/* VOMS 1: SMOOTH PURSUIT */}
+              {step === "voms_pursuit" && (
+                <motion.div
+                  key="voms_pursuit"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="w-full text-center space-y-6 relative"
+                >
+                  <div className="relative w-full h-52 border border-dashed border-rose-500/30 rounded-3xl flex items-center justify-center overflow-hidden bg-rose-500/5">
+                    <motion.div
+                      animate={{
+                        x: [-160, 160, 0, 0, -160],
+                        y: [0, 0, -60, 60, 0],
+                      }}
+                      transition={{ duration: 4.5, repeat: Infinity, ease: "easeInOut" }}
+                      className="w-14 h-14 bg-rose-500 rounded-2xl shadow-xl flex items-center justify-center text-white"
+                    >
+                      <Target size={28} />
+                    </motion.div>
+                  </div>
+                  <div className="space-y-1">
+                    <h3 className="text-2xl font-bold text-foreground">VOMS Smooth Pursuit Tracking</h3>
+                    <p className="text-muted-foreground text-sm max-w-md mx-auto">
+                      Follow the moving target across horizontal and vertical axes without moving your head.
+                    </p>
+                  </div>
+                  <button
+                    onClick={advanceAssessmentStep}
+                    className="px-6 py-2.5 bg-rose-500 hover:bg-rose-600 text-white rounded-xl font-bold text-xs shadow-md cursor-pointer transition-all"
+                  >
+                    Next VOMS Step →
+                  </button>
+                </motion.div>
+              )}
+
+              {/* VOMS 2: FAST SACCADES */}
+              {step === "voms_saccade" && (
+                <motion.div
+                  key="voms_saccade"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="w-full text-center space-y-6 relative"
+                >
+                  <div className="relative w-full h-52 border border-dashed border-rose-500/30 rounded-3xl flex items-center justify-between px-12 overflow-hidden bg-rose-500/5">
+                    <motion.div
+                      animate={{ scale: [1, 1.3, 1], opacity: [0.4, 1, 0.4] }}
+                      transition={{ duration: 0.9, repeat: Infinity }}
+                      className="w-12 h-12 bg-rose-500 rounded-2xl shadow-lg flex items-center justify-center text-white font-black"
+                    >
+                      L
+                    </motion.div>
+                    <motion.div
+                      animate={{ scale: [1.3, 1, 1.3], opacity: [1, 0.4, 1] }}
+                      transition={{ duration: 0.9, repeat: Infinity }}
+                      className="w-12 h-12 bg-rose-500 rounded-2xl shadow-lg flex items-center justify-center text-white font-black"
+                    >
+                      R
+                    </motion.div>
+                  </div>
+                  <div className="space-y-1">
+                    <h3 className="text-2xl font-bold text-foreground">Horizontal & Vertical Fast Saccades</h3>
+                    <p className="text-muted-foreground text-sm max-w-md mx-auto">
+                      Rapidly shift your gaze between the two targets as fast as possible for 10 repetitions.
+                    </p>
+                  </div>
+                  <button
+                    onClick={advanceAssessmentStep}
+                    className="px-6 py-2.5 bg-rose-500 hover:bg-rose-600 text-white rounded-xl font-bold text-xs shadow-md cursor-pointer transition-all"
+                  >
+                    Next VOMS Step →
+                  </button>
+                </motion.div>
+              )}
+
+              {/* VOMS 3: NEAR POINT OF CONVERGENCE (NPC) */}
+              {step === "voms_convergence" && (
+                <motion.div
+                  key="voms_convergence"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="w-full text-center space-y-6 relative"
+                >
+                  <div className="relative w-full h-52 border border-dashed border-rose-500/30 rounded-3xl flex items-center justify-center overflow-hidden bg-rose-500/5">
+                    <motion.div
+                      animate={{ scale: [0.6, 2.2, 0.6] }}
+                      transition={{ duration: 4.5, repeat: Infinity, ease: "easeInOut" }}
+                      className="w-12 h-12 bg-rose-500 rounded-full shadow-2xl flex items-center justify-center text-white font-black"
+                    >
+                      <Target size={24} />
+                    </motion.div>
+                  </div>
+                  <div className="space-y-1">
+                    <h3 className="text-2xl font-bold text-foreground">Near Point of Convergence (NPC)</h3>
+                    <p className="text-muted-foreground text-sm max-w-md mx-auto">
+                      Focus on the center stimulus as it approaches your nose. Adjust measured breakpoint below.
+                    </p>
+                  </div>
+                  <button
+                    onClick={advanceAssessmentStep}
+                    className="px-6 py-2.5 bg-rose-500 hover:bg-rose-600 text-white rounded-xl font-bold text-xs shadow-md cursor-pointer transition-all"
+                  >
+                    Next VOMS Step →
+                  </button>
+                </motion.div>
+              )}
+
+              {/* VOMS 4: VESTIBULO-OCULAR REFLEX (VOR) */}
+              {step === "voms_vor" && (
+                <motion.div
+                  key="voms_vor"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="w-full text-center space-y-6 relative"
+                >
+                  <div className="relative w-full h-52 border border-dashed border-rose-500/30 rounded-3xl flex items-center justify-center overflow-hidden bg-rose-500/5">
+                    <div className="w-16 h-16 rounded-full bg-rose-500 flex items-center justify-center text-white shadow-2xl">
+                      <Target size={30} className="animate-spin" />
+                    </div>
+                    {/* Head motion guidance arrows */}
+                    <div className="absolute inset-x-8 flex justify-between pointer-events-none text-rose-400 font-black text-xs">
+                      <span>⟵ Rotate Head Left</span>
+                      <span>Rotate Head Right ⟶</span>
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <h3 className="text-2xl font-bold text-foreground">Vestibulo-Ocular Reflex (VOR)</h3>
+                    <p className="text-muted-foreground text-sm max-w-md mx-auto">
+                      Keep your eyes locked on the center target while gently moving your head side to side at 180 BPM.
+                    </p>
+                  </div>
+                  <button
+                    onClick={advanceAssessmentStep}
+                    className="px-6 py-2.5 bg-rose-500 hover:bg-rose-600 text-white rounded-xl font-bold text-xs shadow-md cursor-pointer transition-all"
+                  >
+                    Next VOMS Step →
+                  </button>
+                </motion.div>
+              )}
+
+              {/* VOMS 5: VISUAL MOTION SENSITIVITY (VMS) */}
+              {step === "voms_vms" && (
+                <motion.div
+                  key="voms_vms"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="w-full text-center space-y-6 relative"
+                >
+                  <div className="relative w-full h-52 border border-dashed border-rose-500/30 rounded-3xl flex items-center justify-center overflow-hidden bg-[repeating-linear-gradient(45deg,#f43f5e0f,#f43f5e0f_15px,#ffffff00_15px,#ffffff00_30px)]">
+                    <motion.div
+                      animate={{ x: [-140, 140, -140] }}
+                      transition={{ duration: 3.5, repeat: Infinity, ease: "easeInOut" }}
+                      className="w-16 h-16 bg-rose-500 rounded-3xl shadow-2xl flex items-center justify-center text-white"
+                    >
+                      <Eye size={32} />
+                    </motion.div>
+                  </div>
+                  <div className="space-y-1">
+                    <h3 className="text-2xl font-bold text-foreground">Visual Motion Sensitivity (VMS)</h3>
+                    <p className="text-muted-foreground text-sm max-w-md mx-auto">
+                      Rotate your eyes and head in unison while tracking the moving target across full-field background optic flow.
+                    </p>
+                  </div>
+                  <button
+                    onClick={advanceAssessmentStep}
+                    className="px-6 py-2.5 bg-rose-500 hover:bg-rose-600 text-white rounded-xl font-bold text-xs shadow-md cursor-pointer transition-all"
+                  >
+                    Finish VOMS Assessment →
+                  </button>
+                </motion.div>
+              )}
+
               {/* 9. ASSESSMENT COMPLETE */}
               {step === "complete" && (
                 <motion.div
@@ -825,6 +1163,50 @@ export default function VisionTest() {
                       <p className="text-base font-bold text-emerald-500">{metrics.incompleteBlinkPct}%</p>
                     </div>
                   </div>
+
+                  {protocol === "voms" && (
+                    <div className={`p-4 rounded-2xl border text-left space-y-3 ${
+                      isVomsPositive
+                        ? "bg-rose-500/10 border-rose-500/30 text-rose-700 dark:text-rose-300"
+                        : "bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-300"
+                    }`}>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 font-bold text-sm">
+                          <ShieldAlert size={18} className={isVomsPositive ? "text-rose-500" : "text-emerald-500"} />
+                          <span>VOMS Concussion Screen: {isVomsPositive ? "Positive Provocation" : "Normal / Low Provocation"}</span>
+                        </div>
+                        <span className={`text-[11px] px-2.5 py-0.5 rounded-full font-bold uppercase ${
+                          isVomsPositive ? "bg-rose-500/20 text-rose-600 dark:text-rose-400" : "bg-emerald-500/20 text-emerald-600 dark:text-emerald-400"
+                        }`}>
+                          {isVomsPositive ? "Dysfunction Flagged" : "Within Norms"}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                        <div className="bg-background/80 p-2.5 rounded-xl border border-border">
+                          <span className="text-muted-foreground block text-[10px]">Headache</span>
+                          <span className="font-bold text-foreground text-sm">{vomsSymptoms.headache}/10</span>
+                        </div>
+                        <div className="bg-background/80 p-2.5 rounded-xl border border-border">
+                          <span className="text-muted-foreground block text-[10px]">Dizziness</span>
+                          <span className="font-bold text-foreground text-sm">{vomsSymptoms.dizziness}/10</span>
+                        </div>
+                        <div className="bg-background/80 p-2.5 rounded-xl border border-border">
+                          <span className="text-muted-foreground block text-[10px]">Nausea</span>
+                          <span className="font-bold text-foreground text-sm">{vomsSymptoms.nausea}/10</span>
+                        </div>
+                        <div className="bg-background/80 p-2.5 rounded-xl border border-border">
+                          <span className="text-muted-foreground block text-[10px]">Fogginess</span>
+                          <span className="font-bold text-foreground text-sm">{vomsSymptoms.fogginess}/10</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between text-xs px-1">
+                        <span className="text-muted-foreground">Near Point of Convergence (NPC):</span>
+                        <span className={`font-bold ${vomsSymptoms.npcBreakpointCm > 5.0 ? "text-rose-500" : "text-emerald-500"}`}>
+                          {vomsSymptoms.npcBreakpointCm} cm {vomsSymptoms.npcBreakpointCm > 5.0 ? "(Abnormal > 5cm)" : "(Normal ≤ 5cm)"}
+                        </span>
+                      </div>
+                    </div>
+                  )}
 
                   <div className="pt-2 flex flex-col gap-3">
                     <button
@@ -905,6 +1287,113 @@ export default function VisionTest() {
               </div>
             </div>
           </div>
+
+          {protocol === "voms" && (
+            <div className="card-soft border-rose-500/30 bg-rose-500/5 space-y-4">
+              <div className="flex items-center justify-between border-b border-rose-500/20 pb-2">
+                <h3 className="font-bold text-rose-500 text-sm flex items-center gap-2">
+                  <ShieldAlert size={16} /> VOMS Symptom Provocation
+                </h3>
+                <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${
+                  isVomsPositive ? "bg-rose-500/20 text-rose-600 dark:text-rose-400" : "bg-emerald-500/20 text-emerald-600 dark:text-emerald-400"
+                }`}>
+                  {isVomsPositive ? "Provocation Elevated" : "Normal"}
+                </span>
+              </div>
+
+              <p className="text-[11px] text-muted-foreground leading-snug">
+                Rate symptom provocation (0–10) observed during or immediately following VOMS motion tasks.
+              </p>
+
+              <div className="space-y-3 text-xs">
+                <div>
+                  <div className="flex justify-between mb-1">
+                    <span className="text-muted-foreground font-medium">Headache:</span>
+                    <span className={`font-bold ${vomsSymptoms.headache >= 2 ? "text-rose-500 font-extrabold" : "text-foreground"}`}>
+                      {vomsSymptoms.headache} / 10
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="10"
+                    value={vomsSymptoms.headache}
+                    onChange={(e) => setVomsSymptoms(prev => ({ ...prev, headache: Number(e.target.value) }))}
+                    className="w-full accent-rose-500 cursor-pointer h-1.5 bg-muted rounded-lg"
+                  />
+                </div>
+
+                <div>
+                  <div className="flex justify-between mb-1">
+                    <span className="text-muted-foreground font-medium">Dizziness:</span>
+                    <span className={`font-bold ${vomsSymptoms.dizziness >= 2 ? "text-rose-500 font-extrabold" : "text-foreground"}`}>
+                      {vomsSymptoms.dizziness} / 10
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="10"
+                    value={vomsSymptoms.dizziness}
+                    onChange={(e) => setVomsSymptoms(prev => ({ ...prev, dizziness: Number(e.target.value) }))}
+                    className="w-full accent-rose-500 cursor-pointer h-1.5 bg-muted rounded-lg"
+                  />
+                </div>
+
+                <div>
+                  <div className="flex justify-between mb-1">
+                    <span className="text-muted-foreground font-medium">Nausea:</span>
+                    <span className={`font-bold ${vomsSymptoms.nausea >= 2 ? "text-rose-500 font-extrabold" : "text-foreground"}`}>
+                      {vomsSymptoms.nausea} / 10
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="10"
+                    value={vomsSymptoms.nausea}
+                    onChange={(e) => setVomsSymptoms(prev => ({ ...prev, nausea: Number(e.target.value) }))}
+                    className="w-full accent-rose-500 cursor-pointer h-1.5 bg-muted rounded-lg"
+                  />
+                </div>
+
+                <div>
+                  <div className="flex justify-between mb-1">
+                    <span className="text-muted-foreground font-medium">Fogginess:</span>
+                    <span className={`font-bold ${vomsSymptoms.fogginess >= 2 ? "text-rose-500 font-extrabold" : "text-foreground"}`}>
+                      {vomsSymptoms.fogginess} / 10
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="10"
+                    value={vomsSymptoms.fogginess}
+                    onChange={(e) => setVomsSymptoms(prev => ({ ...prev, fogginess: Number(e.target.value) }))}
+                    className="w-full accent-rose-500 cursor-pointer h-1.5 bg-muted rounded-lg"
+                  />
+                </div>
+
+                <div className="pt-2 border-t border-border/80">
+                  <div className="flex justify-between mb-1">
+                    <span className="text-muted-foreground font-medium">NPC Breakpoint:</span>
+                    <span className={`font-bold ${vomsSymptoms.npcBreakpointCm > 5.0 ? "text-rose-500 font-extrabold" : "text-emerald-500 font-bold"}`}>
+                      {vomsSymptoms.npcBreakpointCm} cm {vomsSymptoms.npcBreakpointCm > 5.0 ? "(Abnormal > 5cm)" : "(Normal)"}
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min="2.0"
+                    max="15.0"
+                    step="0.5"
+                    value={vomsSymptoms.npcBreakpointCm}
+                    onChange={(e) => setVomsSymptoms(prev => ({ ...prev, npcBreakpointCm: Number(e.target.value) }))}
+                    className="w-full accent-rose-500 cursor-pointer h-1.5 bg-muted rounded-lg"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="card-soft bg-primary/5 border-primary/20 space-y-3">
             <h3 className="font-bold text-primary flex items-center gap-2">

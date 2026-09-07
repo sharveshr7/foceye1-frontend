@@ -16,7 +16,7 @@ export default function Login() {
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  const redirectPath = (location.state as any)?.from?.pathname || "/dashboard";
+  const redirectPath = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname || "/dashboard";
 
   useEffect(() => {
     if (isAuthenticated) {

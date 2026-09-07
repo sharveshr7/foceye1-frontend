@@ -24,8 +24,10 @@ import {
   VideoOff,
   Sparkles,
   Eye,
+  Zap,
   Languages,
   Download,
+  Radio,
 } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
@@ -128,17 +130,47 @@ export default function TherapySession() {
     currentInstruction: "Look straight at the screen.",
     trackingState: "READY",
     trackingQuality: "optimal" as "optimal" | "acceptable" | "poor",
+    currentSpeedFactor: 1.0,
+    autoLevelStage: "Standard Clinical Pace",
+    autoLevelingEnabled: true,
   });
   const [countdown, setCountdown] = useState<number | null>(null);
   const [sessionNumber, setSessionNumber] = useState(1);
   const [therapyStatus, setTherapyStatus] = useState<TherapyStatus>("Not Started");
   const [gazeFrame, setGazeFrame] = useState<EyeTrackingFrame | null>(null);
-  // Live Hardware Eye Telemetry Stream (only run simulation fallback when mode is device)
-  const { gaze: hardwareGaze, metrics: hwMetrics, isConnected: isHardwareConnected } = useGazeTelemetry(
-    "default_session",
+
+  // Dynamic Tele-Consultation Room ID
+  const teleSessionId = useMemo(() => {
+    return selectedPatient?.id ? `session-${selectedPatient.id}` : "room-101";
+  }, [selectedPatient?.id]);
+
+  // Live Hardware Eye Telemetry Stream & Real-time Tele-supervision broadcaster
+  const {
+    gaze: hardwareGaze,
+    metrics: hwMetrics,
+    isConnected: isHardwareConnected,
+    sendBinaryTelemetry,
+  } = useGazeTelemetry(
+    teleSessionId,
     undefined,
     mode === "device"
   );
+
+  const handleGazeFrameUpdate = (frame: EyeTrackingFrame) => {
+    setGazeFrame(frame);
+    // Broadcast gaze coordinates in real-time to clinician tele-consultation room observers
+    if (frame.gazeX !== undefined && frame.gazeY !== undefined) {
+      sendBinaryTelemetry(
+        frame.gazeX,
+        frame.gazeY,
+        frame.pupilLeftMm || 3.8,
+        frame.pupilRightMm || 3.8,
+        frame.confidence,
+        60,
+        100
+      );
+    }
+  };
 
   useEffect(() => {
     if (isHardwareConnected && hardwareGaze) {
@@ -529,6 +561,19 @@ export default function TherapySession() {
         </div>
 
         <div className="flex items-center gap-3">
+          {/* Live Tele-Consultation Room Launcher */}
+          <button
+            type="button"
+            onClick={() => {
+              window.open(`/tele-observe/${teleSessionId}`, "_blank", "noopener,noreferrer");
+            }}
+            className="px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 border bg-teal-500/10 hover:bg-teal-500/20 text-teal-600 dark:text-teal-300 border-teal-500/30 transition-all cursor-pointer shadow-xs"
+            title="Launch live clinician tele-consultation gaze mirroring room in a new tab"
+          >
+            <Radio size={13} className="text-teal-500 animate-pulse" />
+            <span>Tele-Mirror Room</span>
+          </button>
+
           {/* Live Hardware Telemetry Badge */}
           <div
             className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 border ${
@@ -1109,6 +1154,17 @@ export default function TherapySession() {
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                         <span>{metrics.accuracy}%</span>
                       </div>
+
+                      {metrics.currentSpeedFactor && (
+                        <div
+                          className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 bg-teal-500/20 text-teal-300 border border-teal-500/40"
+                          title={`Dynamic AI Auto-Leveling: ${metrics.autoLevelStage || "Standard Pace"}`}
+                        >
+                          <Zap size={10} className="text-teal-400 animate-pulse" />
+                          <span>{metrics.currentSpeedFactor}x</span>
+                          <span className="hidden sm:inline text-[9px] text-teal-200/80">({metrics.autoLevelStage || "Auto-Level"})</span>
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -1167,7 +1223,7 @@ export default function TherapySession() {
                           showOverlay={true}
                           overlayType="eye-tracking"
                           statusBadge="Tracking"
-                          onEyeTrackingFrame={setGazeFrame}
+                          onEyeTrackingFrame={handleGazeFrameUpdate}
                         />
                       </div>
                     )}

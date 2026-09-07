@@ -33,9 +33,9 @@ export const PatientReportModal: React.FC<PatientReportModalProps> = ({
   patient,
   diagnosis,
 }) => {
-  if (!isOpen) return null;
-
   const [isDownloadingPdf, setIsDownloadingPdf] = React.useState(false);
+
+  if (!isOpen) return null;
 
   const hospitalName = authService.getCurrentHospitalName();
   const hospitalId = authService.getCurrentHospitalId();

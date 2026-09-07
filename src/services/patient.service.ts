@@ -1,6 +1,24 @@
-import type { Patient, PatientInput } from "@/types/patient";
+import type { Patient, PatientInput, PatientClinicalStatus, PatientStatus } from "@/types/patient";
 import { ApiClient } from "./api.client";
 import { authService } from "./auth.service";
+
+interface BackendPatient {
+  id: string;
+  name: string;
+  age?: number;
+  gender?: string;
+  condition?: string;
+  icd10?: string;
+  stage?: string;
+  bcea_score?: number;
+  initial_observation?: string;
+  created_at?: string;
+  clinical_status?: PatientClinicalStatus;
+  observed_pattern?: string;
+  recommended_therapy?: string;
+  adherence?: number;
+  last_session?: string;
+}
 
 const PATIENTS_STORAGE_PREFIX = "foceye_patients_";
 
@@ -33,7 +51,7 @@ export const patientService = {
       const key = this.getStorageKey();
       localStorage.setItem(key, JSON.stringify(patients));
     } catch (err) {
-      console.warn("[patientService] Error writing patients to localStorage:", err);
+      console.warn("[patientService] Could not persist to localStorage:", err);
     }
   },
 
@@ -42,12 +60,12 @@ export const patientService = {
     const localMap: Map<string, Patient> = new Map(localPatients.map((p: Patient) => [p.id, p]));
 
     try {
-      const remotePatients = await ApiClient.get<any[]>("/patients");
+      const remotePatients = await ApiClient.get<BackendPatient[]>("/patients");
       if (Array.isArray(remotePatients)) {
         // Map backend patient format to frontend Patient model
         const mapped: Patient[] = remotePatients.map((rp) => {
           const local: Patient | undefined = localMap.get(rp.id);
-          const clinicalStatus = rp.clinical_status || local?.clinicalStatus || "EYE_TEST_PENDING";
+          const clinicalStatus: PatientClinicalStatus = rp.clinical_status || local?.clinicalStatus || "EYE_TEST_PENDING";
           return {
             id: rp.id,
             hospitalId: authService.getCurrentHospitalId(),
@@ -66,8 +84,8 @@ export const patientService = {
             diagnosis: rp.condition ? `${rp.condition} (${rp.stage || 'Active Therapy'})` : local?.diagnosis || "Pending Eye Test",
             assignedDoctor: "Dr. Sarah Smith, OD",
             registrationDate: rp.created_at ? rp.created_at.split("T")[0] : (local?.registrationDate || new Date().toISOString().split("T")[0]),
-            status: (rp.stage === "Completed" ? "Completed" : "Active") as any,
-            clinicalStatus: clinicalStatus as any,
+            status: (rp.stage === "Completed" ? "Completed" : "Active") as PatientStatus,
+            clinicalStatus,
             observedPattern: rp.observed_pattern || local?.observedPattern || "",
             recommendedTherapyId: rp.recommended_therapy || local?.recommendedTherapyId || "",
             notes: `Adherence: ${rp.adherence || 100}%. Last evaluated: ${rp.last_session || 'Recently'}.`,
@@ -93,7 +111,7 @@ export const patientService = {
     const local: Patient | undefined = patients.find((p: Patient) => p.id === id);
 
     try {
-      const rp = await ApiClient.get<any>(`/patients/${id}`);
+      const rp = await ApiClient.get<BackendPatient>(`/patients/${id}`);
       if (rp && rp.id) {
         return {
           id: rp.id,
@@ -114,7 +132,7 @@ export const patientService = {
           assignedDoctor: "Dr. Sarah Smith, OD",
           registrationDate: local?.registrationDate || new Date().toISOString().split("T")[0],
           status: "Active",
-          clinicalStatus: (rp.clinical_status || local?.clinicalStatus || "EYE_TEST_PENDING") as any,
+          clinicalStatus: (rp.clinical_status || local?.clinicalStatus || "EYE_TEST_PENDING") as PatientClinicalStatus,
           observedPattern: rp.observed_pattern || local?.observedPattern || "",
           recommendedTherapyId: rp.recommended_therapy || local?.recommendedTherapyId || "",
           notes: `Adherence: ${rp.adherence || 100}%.`,
@@ -136,7 +154,7 @@ export const patientService = {
 
     // Sync with FastAPI backend first to obtain canonical Supabase UUID
     try {
-      const backendRes = await ApiClient.post<any>("/patients", {
+      const backendRes = await ApiClient.post<BackendPatient>("/patients", {
         name: `${input.firstName} ${input.lastName}`.trim(),
         age: Number(input.age) || 20,
         gender: input.gender || "Other",

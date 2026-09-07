@@ -30,7 +30,10 @@ export const GazeHeatmap: React.FC<GazeHeatmapProps> = ({
   const [viewMode, setViewMode] = useState<"heatmap" | "trail">("heatmap");
 
   // Calculate Quadrant percentages & BCEA
-  const validPoints = points.filter((p) => p.x >= 0 && p.x <= 1 && p.y >= 0 && p.y <= 1);
+  const validPoints = useMemo(
+    () => points.filter((p) => p.x >= 0 && p.x <= 1 && p.y >= 0 && p.y <= 1),
+    [points]
+  );
   const total = Math.max(1, validPoints.length);
 
   let centerCount = 0;
@@ -241,7 +244,7 @@ export const GazeHeatmap: React.FC<GazeHeatmapProps> = ({
       ctx.stroke();
       ctx.setLineDash([]);
     }
-  }, [points, width, height, viewMode, showBCEA, showQuadrants]);
+  }, [validPoints, width, height, viewMode, showBCEA, showQuadrants]);
 
   return (
     <div className={`card-soft p-4 space-y-3 ${className}`}>

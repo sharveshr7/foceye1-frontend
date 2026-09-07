@@ -47,6 +47,8 @@ export interface TherapyCanvasProps {
   gazeFrame?: EyeTrackingFrame | null;
   pediatricMode?: boolean;
   pediatricTheme?: "space" | "safari" | "ocean" | "magic";
+  autoLeveling?: boolean;
+  onSpeedChange?: (speed: number) => void;
   onMetricUpdate?: (metrics: {
     accuracy: number;
     blinks: number;
@@ -59,6 +61,9 @@ export interface TherapyCanvasProps {
     currentInstruction: string;
     trackingState: TherapyStateMachineState;
     trackingQuality: "optimal" | "acceptable" | "poor";
+    currentSpeedFactor?: number;
+    autoLevelStage?: string;
+    autoLevelingEnabled?: boolean;
   }) => void;
   onGazePoint?: (pt: { x: number; y: number }) => void;
   onSessionComplete?: () => void;
@@ -71,11 +76,14 @@ export const TherapyCanvas: React.FC<TherapyCanvasProps> = ({
   gazeFrame,
   pediatricMode = false,
   pediatricTheme = "space",
+  autoLeveling = true,
+  onSpeedChange,
   onMetricUpdate,
   onGazePoint,
   onSessionComplete,
 }) => {
   const [speed, setSpeed] = useState<number>(1);
+  const [autoLevelingEnabled, setAutoLevelingEnabled] = useState<boolean>(autoLeveling);
   const [isMuted, setIsMuted] = useState(false);
   const [highContrast, setHighContrast] = useState(false);
   const [isVoiceMuted, setIsVoiceMuted] = useState<boolean>(() => voiceCoach.getMuted());
@@ -90,6 +98,10 @@ export const TherapyCanvas: React.FC<TherapyCanvasProps> = ({
   const [detectedBlinksCount, setDetectedBlinksCount] = useState(0);
   const [lastLatencyMs, setLastLatencyMs] = useState<number | null>(null);
   const [latencyHistory, setLatencyHistory] = useState<number[]>([]);
+
+  // AI Auto-Leveling Sliding Window Ref
+  const recentDecisionsRef = useRef<{ hit: boolean; timestamp: number }[]>([]);
+  const lastAutoLevelTimeRef = useRef<number>(0);
 
   // Visual Target & Gaze Tracking Lock
   const [targetPos, setTargetPos] = useState<{ x: number; y: number }>({ x: 0.5, y: 0.5 });
@@ -228,6 +240,7 @@ export const TherapyCanvas: React.FC<TherapyCanvasProps> = ({
         lastStateChangeTimeRef.current = performance.now();
       }, 250);
     } else if (therapyState === "CORRECT") {
+      recentDecisionsRef.current.push({ hit: true, timestamp: performance.now() });
       soundEffects.playTargetCatch();
       const praiseText = voiceCoach.getPromptText("good_short");
       setInstructionText(praiseText);
@@ -243,6 +256,7 @@ export const TherapyCanvas: React.FC<TherapyCanvasProps> = ({
         setTherapyState("FEEDBACK");
       }, 650);
     } else if (therapyState === "INCORRECT") {
+      recentDecisionsRef.current.push({ hit: false, timestamp: performance.now() });
       // Determine directionally accurate corrective voice instruction
       let correctivePrompt: VoicePromptKey = "try_again";
       if (currentStep.isBlinkRequired) {
@@ -301,6 +315,63 @@ export const TherapyCanvas: React.FC<TherapyCanvasProps> = ({
     timeLeft,
     onSessionComplete,
   ]);
+
+  // =========================================================================
+  // AI AUTO-LEVELING ADAPTIVE DIFFICULTY ENGINE
+  // Evaluates rolling performance over 15-20s windows to adapt speed & challenge
+  // =========================================================================
+  useEffect(() => {
+    if (!isPlaying || !autoLevelingEnabled) return;
+    const interval = setInterval(() => {
+      const now = performance.now();
+      // Keep only decisions from the last 20 seconds
+      recentDecisionsRef.current = recentDecisionsRef.current.filter(
+        (d) => now - d.timestamp <= 20000
+      );
+
+      if (
+        recentDecisionsRef.current.length >= 4 &&
+        now - lastAutoLevelTimeRef.current >= 8000
+      ) {
+        const hits = recentDecisionsRef.current.filter((d) => d.hit).length;
+        const hitRate = hits / recentDecisionsRef.current.length;
+
+        if (hitRate >= 0.8) {
+          // Superior tracking precision -> Level Up (+0.1x speed, cap at 2.0x)
+          if (speed < 2.0) {
+            const nextSpeed = Math.min(2.0, Math.round((speed + 0.1) * 10) / 10);
+            setSpeed(nextSpeed);
+            onSpeedChange?.(nextSpeed);
+            lastAutoLevelTimeRef.current = now;
+            recentDecisionsRef.current = [];
+            soundEffects.playLevelUp();
+            voiceCoach.speakPrompt("level_up", true);
+            if (containerRef.current) {
+              const rect = containerRef.current.getBoundingClientRect();
+              triggerHitFeedback(rect.width * 0.5, rect.height * 0.25, `🚀 Speed Level UP! (${nextSpeed}x)`);
+            }
+          }
+        } else if (hitRate <= 0.55) {
+          // Gaze struggle or fatigue -> Adaptive Pacing (-0.15x speed, floor at 0.6x)
+          if (speed > 0.6) {
+            const nextSpeed = Math.max(0.6, Math.round((speed - 0.15) * 10) / 10);
+            setSpeed(nextSpeed);
+            onSpeedChange?.(nextSpeed);
+            lastAutoLevelTimeRef.current = now;
+            recentDecisionsRef.current = [];
+            soundEffects.playPacingRelax();
+            voiceCoach.speakPrompt("level_relax", true);
+            if (containerRef.current) {
+              const rect = containerRef.current.getBoundingClientRect();
+              triggerHitFeedback(rect.width * 0.5, rect.height * 0.25, `🛡️ Adaptive Pacing (${nextSpeed}x)`);
+            }
+          }
+        }
+      }
+    }, 2000);
+
+    return () => clearInterval(interval);
+  }, [isPlaying, autoLevelingEnabled, speed, onSpeedChange]);
 
   // =========================================================================
   // CONTINUOUS GAZE FRAME EVALUATION LOOP (Active during TRACKING state)
@@ -424,6 +495,15 @@ export const TherapyCanvas: React.FC<TherapyCanvasProps> = ({
     const quality: "optimal" | "acceptable" | "poor" =
       confidenceVal >= 75 ? "optimal" : confidenceVal >= 40 ? "acceptable" : "poor";
 
+    const autoLevelStage =
+      speed >= 1.4
+        ? "Dynamic High-Velocity"
+        : speed >= 1.1
+        ? "Accelerated Focus"
+        : speed <= 0.8
+        ? "Adaptive Recovery Pacing"
+        : "Standard Clinical Pace";
+
     onMetricUpdate({
       accuracy: computedAccuracy,
       blinks: gazeFrame?.blinkRatePerMin ?? detectedBlinksCount,
@@ -436,6 +516,9 @@ export const TherapyCanvas: React.FC<TherapyCanvasProps> = ({
       currentInstruction: instructionText || voiceCoach.getPromptText("follow_target"),
       trackingState: therapyState,
       trackingQuality: quality,
+      currentSpeedFactor: speed,
+      autoLevelStage,
+      autoLevelingEnabled,
     });
   }, [
     onMetricUpdate,
@@ -448,6 +531,8 @@ export const TherapyCanvas: React.FC<TherapyCanvasProps> = ({
     instructionText,
     therapyState,
     isGazeLocked,
+    speed,
+    autoLevelingEnabled,
   ]);
 
   // Pediatric Emoji Mascot
@@ -508,12 +593,24 @@ export const TherapyCanvas: React.FC<TherapyCanvasProps> = ({
           <span className="text-amber-400 hidden sm:inline">✕ {incorrectMovements}</span>
         </div>
 
-        {/* Action controls (Speed, Chime Mute, Contrast) */}
+        {/* Action controls (Auto-Level, Speed, Chime Mute, Contrast) */}
         <div className="flex items-center gap-1.5 sm:gap-2 pointer-events-auto shrink-0">
+          <button
+            onClick={() => setAutoLevelingEnabled((prev) => !prev)}
+            className={`h-8 sm:h-9 px-2 sm:px-2.5 rounded-xl border flex items-center gap-1 text-[10px] sm:text-xs font-bold transition-all shadow-lg ${
+              autoLevelingEnabled
+                ? "bg-teal-500/20 text-teal-300 border-teal-500/50 shadow-[0_0_12px_rgba(20,184,166,0.3)]"
+                : "bg-black/60 hover:bg-black/80 text-muted-foreground border-white/10"
+            }`}
+            title="Toggle Dynamic AI Auto-Leveling difficulty adjustment"
+          >
+            <Zap size={13} className={autoLevelingEnabled ? "text-teal-400 animate-pulse" : "text-muted-foreground"} />
+            <span className="hidden md:inline">{autoLevelingEnabled ? "Auto-Level ON" : "Auto-Level OFF"}</span>
+          </button>
           <button
             onClick={() => setSpeed((prev) => (prev >= 2 ? 0.75 : prev + 0.25))}
             className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-black/60 hover:bg-black/80 text-white flex items-center justify-center text-xs font-bold border border-white/10 transition-colors shadow-lg"
-            title="Adjust target speed"
+            title="Adjust target speed manually"
           >
             {speed}x
           </button>

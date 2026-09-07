@@ -144,6 +144,27 @@
   .badge-clinical-critical {
     @apply inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-950/40 dark:text-rose-400 dark:border-rose-800/40 shadow-xs transition-colors;
   }
+
+  /* High-Performance Clinical HUD Elements */
+  .glass-hud {
+    @apply bg-slate-900/80 dark:bg-slate-950/85 backdrop-blur-2xl border border-cyan-500/20 shadow-2xl text-white;
+  }
+
+  .hud-card {
+    @apply relative overflow-hidden rounded-2xl bg-card/75 dark:bg-slate-900/60 backdrop-blur-xl border border-border/80 hover:border-primary/40 transition-all duration-300 shadow-soft hover:shadow-xl;
+  }
+
+  .hud-pill {
+    @apply inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold border transition-all;
+  }
+
+  .hud-pill-active {
+    @apply hud-pill bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 shadow-xs;
+  }
+
+  .hud-pill-warning {
+    @apply hud-pill bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30 shadow-xs;
+  }
 }
 
 @keyframes spin-slow {
@@ -184,6 +205,20 @@
   }
 }
 
+@keyframes hud-scan {
+  0% {
+    top: 0%;
+    opacity: 0.8;
+  }
+  50% {
+    opacity: 0.3;
+  }
+  100% {
+    top: 100%;
+    opacity: 0.8;
+  }
+}
+
 .animate-spin-slow {
   animation: spin-slow 12s linear infinite;
 }
@@ -197,3 +232,8 @@
   background-size: 200% 100%;
   animation: shimmer 3s infinite;
 }
+
+.animate-hud-scan {
+  animation: hud-scan 3s ease-in-out infinite alternate;
+}
+

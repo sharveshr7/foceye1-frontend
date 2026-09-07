@@ -77,7 +77,7 @@ export const therapyService = {
       const endpoint = patientId
         ? `/therapy/sessions?patient_id=${encodeURIComponent(patientId)}`
         : "/therapy/sessions";
-      const remoteSessions = await ApiClient.get<any[]>(endpoint);
+      const remoteSessions = await ApiClient.get<BackendTherapySession[]>(endpoint);
       if (Array.isArray(remoteSessions)) {
         const mapped: TherapySessionData[] = remoteSessions.map((s) => ({
           id: s.id,

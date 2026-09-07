@@ -109,7 +109,7 @@ export default function Analytics() {
   const patient = selectedPatient;
   const patientName = `${patient.firstName} ${patient.lastName}`;
   const hasSessions = (trends?.total_sessions_completed || 0) > 0;
-  const lastVisit = (patient as any).last_session || patient.registrationDate || "Pending";
+  const lastVisit = (patient as unknown as { last_session?: string }).last_session || patient.registrationDate || "Pending";
 
   const summaryCards = [
     { icon: TrendingUp, label: "Total Vision Tests", value: hasSessions ? String(Math.max(1, Math.round((trends?.total_sessions_completed || 0) / 3))) : "0", detail: "Patient-specific assessments" },

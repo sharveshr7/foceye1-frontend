@@ -29,6 +29,18 @@ export interface StaffMember {
 
 export type StaffInput = Omit<StaffMember, "id" | "hospitalId" | "createdAt" | "updatedAt">;
 
+interface BackendStaff {
+  id: string;
+  hospitalId?: string;
+  name: string;
+  email: string;
+  role?: string;
+  department?: string;
+  phone?: string;
+  status?: string;
+  joinDate?: string;
+}
+
 const STORAGE_KEY_PREFIX = "foceye_staff_";
 
 export const staffService = {
@@ -62,7 +74,7 @@ export const staffService = {
 
   async list(): Promise<StaffMember[]> {
     try {
-      const remoteStaff = await ApiClient.get<any[]>("/auth/staff");
+      const remoteStaff = await ApiClient.get<BackendStaff[]>("/auth/staff");
       if (Array.isArray(remoteStaff) && remoteStaff.length > 0) {
         const mapped: StaffMember[] = remoteStaff.map((s) => ({
           id: s.id,
@@ -90,7 +102,7 @@ export const staffService = {
     let assignedId = `staff_${Date.now()}`;
 
     try {
-      const res = await ApiClient.post<any>("/auth/staff", {
+      const res = await ApiClient.post<BackendStaff>("/auth/staff", {
         name: input.name,
         email: input.email,
         role: input.role,

@@ -60,6 +60,25 @@ export interface AIInsight {
   recommendations: { title: string; description: string; type?: string }[];
 }
 
+export interface RemoteAIInsightResponse {
+  summary?: string;
+  risk_level?: string;
+  confidence_score?: number;
+  source?: string;
+  biomarkers?: Array<{
+    name: string;
+    value: string | number;
+    status: string;
+    recommendation: string;
+  }>;
+  recommended_protocols?: string[];
+  observed_findings?: string[];
+  possible_concerns?: string[];
+  recommendations?: string[];
+  data_sufficiency?: string;
+  confidence_quality_indicator?: string;
+}
+
 export interface AssessmentMetrics {
   patientId?: string;
   patientName: string;
@@ -80,6 +99,15 @@ export interface AssessmentMetrics {
   verticalGazeRangeDeg?: number;
   totalFramesSampled?: number;
   notes?: string;
+  vomsScores?: {
+    headache: number;
+    dizziness: number;
+    nausea: number;
+    fogginess: number;
+    npcCm: number;
+    isPositive: boolean;
+    provocationDelta: number;
+  };
 }
 
 import { ApiClient } from "./api.client";
@@ -578,7 +606,7 @@ export const aiService = {
 
     // Try to merge rich synthesis from FastAPI Backend /ai/insights
     try {
-      const remoteRes = await ApiClient.post<any>("/ai/insights", {
+      const remoteRes = await ApiClient.post<RemoteAIInsightResponse>("/ai/insights", {
         patient_id: assessment.patientId,
         condition: planResult.suspectedVisualProblem,
         age: assessment.age,
@@ -593,6 +621,7 @@ export const aiService = {
         incomplete_blink_pct: incBlinks,
         calibration_accuracy: assessment.calibrationPrecision,
         total_frames_sampled: assessment.totalFramesSampled ?? 40,
+        voms_scores: assessment.vomsScores,
       });
 
       if (remoteRes) {
@@ -615,6 +644,33 @@ export const aiService = {
       // Graceful offline fallback
     }
 
+    // Client-side VOMS Enrichment if positive
+    if (assessment.vomsScores && assessment.vomsScores.isPositive) {
+      planResult.suspectedVisualProblem = "Vestibular-Ocular Dysfunction / Sports Concussion Screen Positive";
+      planResult.severity = "Severe";
+      planResult.protocolName = "FOCEYE Neuro-Visual Vestibular Rehabilitation Protocol";
+      planResult.primaryExerciseId = "focus-hold";
+      planResult.precautions = [
+        "Avoid rapid head rotations and high-velocity saccades until symptom resolution.",
+        "Follow strict graduated Return-to-Learn and Return-to-Play clinical protocols.",
+        "Immediately discontinue exercises if headache, dizziness, or nausea increase by ≥ 2 points.",
+      ];
+      planResult.observedFindings = [
+        ...(planResult.observedFindings || []),
+        `VOMS Concussion Screen POSITIVE: Provocation delta ${assessment.vomsScores.provocationDelta}/10 (Headache: ${assessment.vomsScores.headache}/10, Dizziness: ${assessment.vomsScores.dizziness}/10, Nausea: ${assessment.vomsScores.nausea}/10, Fogginess: ${assessment.vomsScores.fogginess}/10).`,
+        `Near Point of Convergence Breakpoint: ${assessment.vomsScores.npcCm} cm (Receded beyond normative 5.0 cm threshold).`,
+      ];
+      planResult.possibleConcerns = [
+        ...(planResult.possibleConcerns || []),
+        "Elevated symptom provocation during ocular-vestibular challenge consistent with mild traumatic brain injury.",
+      ];
+      planResult.recommendations = [
+        "Specialist sports medicine / neuro-ophthalmic clinical evaluation.",
+        "Graduated vestibular-ocular rehabilitation focusing on central gaze stabilization.",
+        "Monitor symptom resolution with follow-up VOMS screening in 7 days.",
+      ];
+    }
+
     planResult.clinicalSummary = planResult.clinicalFindings;
     return planResult;
   },
@@ -624,7 +680,7 @@ export const aiService = {
    */
   async getInsights(patient?: { condition?: string; age?: number; id?: string }): Promise<AIInsight> {
     try {
-      const response = await ApiClient.post<any>("/ai/insights", {
+      const response = await ApiClient.post<RemoteAIInsightResponse>("/ai/insights", {
         patient_id: patient?.id,
         condition: patient?.condition || "Convergence Insufficiency",
         age: patient?.age || 28,

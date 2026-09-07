@@ -47,7 +47,14 @@ export type VoicePromptKey =
   | "look_lower"
   | "look_straight_screen"
   | "position_face"
-  | "move_brighter";
+  | "move_brighter"
+  | "level_up"
+  | "level_relax"
+  | "voms_pursuit"
+  | "voms_saccade"
+  | "voms_convergence"
+  | "voms_vor"
+  | "voms_vms";
 
 export const VOICE_TRANSLATIONS: Record<SupportedLanguage, Record<VoicePromptKey, string>> = {
   en: {
@@ -75,6 +82,13 @@ export const VOICE_TRANSLATIONS: Record<SupportedLanguage, Record<VoicePromptKey
     look_straight_screen: "Look straight at the screen. Keep your head still.",
     position_face: "Please position your face inside the frame.",
     move_brighter: "Please move to a brighter area.",
+    level_up: "Target speed increasing. Keep up the good focus!",
+    level_relax: "Pacing adjusted. Relax your eyes and follow the target.",
+    voms_pursuit: "Follow the smooth moving target horizontally and vertically.",
+    voms_saccade: "Quickly look back and forth between the targets.",
+    voms_convergence: "Focus on the target as it approaches your nose.",
+    voms_vor: "Keep your eyes locked on the target while gently turning your head.",
+    voms_vms: "Follow the target with your eyes and head while the background moves.",
   },
   ta: {
     look_right: "வலது பக்கம் பாருங்கள்.",
@@ -101,6 +115,13 @@ export const VOICE_TRANSLATIONS: Record<SupportedLanguage, Record<VoicePromptKey
     look_straight_screen: "திரையை நேராகப் பாருங்கள். தலையை அசைக்காதீர்கள்.",
     position_face: "உங்கள் முகத்தை சட்டத்திற்குள் வைக்கவும்.",
     move_brighter: "வெளிச்சமான இடத்திற்கு மாறவும்.",
+    level_up: "இலக்கின் வேகம் அதிகரிக்கிறது. சிறப்பான கவனம்!",
+    level_relax: "வேகம் சரிசெய்யப்பட்டது. கண்களைத் தளர்த்தி இலக்கைப் பின்பற்றுங்கள்.",
+    voms_pursuit: "கிடைமட்டமாகவும் செங்குத்தாகவும் நகரும் இலக்கைப் பின்பற்றுங்கள்.",
+    voms_saccade: "இலக்குகளுக்கு இடையே விரைவாக மாறி மாறிப் பாருங்கள்.",
+    voms_convergence: "இலக்கு உங்கள் மூக்கை நோக்கி வரும்போது அதைக் கூர்ந்து கவனியுங்கள்.",
+    voms_vor: "தலையை மெதுவாகத் திருப்பும்போது கண்களை இலக்கில் நிலையாக வையுங்கள்.",
+    voms_vms: "பின்னணி நகரும் போது உங்கள் கண்கள் மற்றும் தலையால் இலக்கைப் பின்பற்றுங்கள்.",
   },
   ml: {
     look_right: "വലത്തോട്ട് നോക്കുക.",
@@ -127,6 +148,13 @@ export const VOICE_TRANSLATIONS: Record<SupportedLanguage, Record<VoicePromptKey
     look_straight_screen: "സ്ക്രീനിലേക്ക് നേരെ നോക്കുക. തല അനക്കരുത്.",
     position_face: "നിങ്ങളുടെ മുഖം ഫ്രെയിമിനുള്ളിൽ വയ്ക്കുക.",
     move_brighter: "കൂടുതൽ വെളിച്ചമുള്ള സ്ഥലത്തേക്ക് മാറുക.",
+    level_up: "ലക്ഷ്യത്തിന്റെ വേഗത വർദ്ധിക്കുന്നു. മികച്ച ഏകാഗ്രത!",
+    level_relax: "വേഗത ക്രമീകരിച്ചു. കണ്ണുകൾക്ക് അയവ് നൽകി ലക്ഷ്യം പിന്തുടരുക.",
+    voms_pursuit: "തിരശ്ചീനമായും ലംബമായും ചലിക്കുന്ന ലക്ഷ്യത്തെ സുഗമമായി പിന്തുടരുക.",
+    voms_saccade: "ലക്ഷ്യങ്ങൾക്കിടയിൽ വേഗത്തിൽ മാറിമാറി നോക്കുക.",
+    voms_convergence: "ലക്ഷ്യം മൂക്കിനടുത്തേക്ക് വരുമ്പോൾ സൂക്ഷ്മമായി ശ്രദ്ധിക്കുക.",
+    voms_vor: "തല പതുക്കെ തിരിക്കുമ്പോൾ കണ്ണുകൾ ലക്ഷ്യത്തിൽ ഉറപ്പിച്ചു നിർത്തുക.",
+    voms_vms: "പശ്ചാത്തലം മാറുമ്പോൾ കണ്ണും തലയും ഒരുമിച്ച് ലക്ഷ്യത്തെ പിന്തുടരുക.",
   },
   te: {
     look_right: "కుడివైపు చూడండి.",
@@ -153,6 +181,13 @@ export const VOICE_TRANSLATIONS: Record<SupportedLanguage, Record<VoicePromptKey
     look_straight_screen: "స్క్రీన్ వైపు నేరుగా చూడండి. తల తిప్పకండి.",
     position_face: "దయచేసి మీ ముఖాన్ని ఫ్రేమ్‌లో ఉంచండి.",
     move_brighter: "దయచేసి మరింత వెలుతురు ఉన్న ప్రదేశానికి వెళ్ళండి.",
+    level_up: "లక్ష్యం వేగం పెరుగుతోంది. అద్భుతమైన ఏకాగ్రత!",
+    level_relax: "వేగం సర్దుబాటు చేయబడింది. కళ్ళను ప్రశాంతంగా ఉంచి లక్ష్యాన్ని అనుసరించండి.",
+    voms_pursuit: "అడ్డంగా మరియు నిలువుగా కదులుతున్న లక్ష్యాన్ని సాఫీగా అనుసరించండి.",
+    voms_saccade: "లక్ష్యాల మధ్య వేగంగా అటూ ఇటూ చూడండి.",
+    voms_convergence: "లక్ష్యం మీ ముక్కు వద్దకు వస్తున్నప్పుడు దానిపై శ్రద్ధ పెట్టండి.",
+    voms_vor: "తల నెమ్మదిగా తిప్పుతూ కళ్ళను లక్ష్యంపై స్థిరంగా ఉంచండి.",
+    voms_vms: "నేపథ్యం కదులుతున్నప్పుడు మీ కళ్ళు మరియు తలతో లక్ష్యాన్ని అనుసరించండి.",
   },
   hi: {
     look_right: "दाईं ओर देखें।",
@@ -179,6 +214,13 @@ export const VOICE_TRANSLATIONS: Record<SupportedLanguage, Record<VoicePromptKey
     look_straight_screen: "स्क्रीन पर सीधे देखें। सिर को स्थिर रखें।",
     position_face: "कृपया अपना चेहरा फ्रेम के अंदर रखें।",
     move_brighter: "कृपया अधिक रोशनी वाले स्थान पर जाएं।",
+    level_up: "लक्ष्य की गति बढ़ाई जा रही है। बहुत अच्छा ध्यान!",
+    level_relax: "गति धीमी की गई है। आँखों को तनावमुक्त रखें और लक्ष्य पर ध्यान दें।",
+    voms_pursuit: "क्षैतिज और लंबवत गतिमान लक्ष्य का आसानी से पीछा करें।",
+    voms_saccade: "लक्ष्यों के बीच तेज़ी से इधर-उधर देखें।",
+    voms_convergence: "जैसे-जैसे लक्ष्य नाक के पास आए, उस पर ध्यान केंद्रित करें।",
+    voms_vor: "सिर को धीरे-धीरे घुमाते हुए भी आँखें लक्ष्य पर केंद्रित रखें।",
+    voms_vms: "बैकग्राउंड हिलने पर आँखों और सिर दोनों से लक्ष्य का पीछा करें।",
   },
 };
 
@@ -195,6 +237,8 @@ export interface GazeEvaluation {
 class VoiceCoachService {
   private isMuted: boolean = false;
   private currentLanguage: SupportedLanguage = "en";
+  private speechRate: number = 0.95;
+  private speechVolume: number = 1.0;
   private lastSpokenTime: number = 0;
   private lastSpokenPromptKey: VoicePromptKey | null = null;
   private minIntervalMs: number = 3000; // Minimum 3.0s between automated voice cues
@@ -211,6 +255,12 @@ class VoiceCoachService {
       if (storedLang && ["en", "ta", "ml", "te", "hi"].includes(storedLang)) {
         this.currentLanguage = storedLang;
       }
+
+      const storedRate = localStorage.getItem("foceye_voice_coach_rate");
+      if (storedRate) this.speechRate = parseFloat(storedRate) || 0.95;
+
+      const storedVolume = localStorage.getItem("foceye_voice_coach_volume");
+      if (storedVolume) this.speechVolume = parseFloat(storedVolume) || 1.0;
 
       this.initVoice();
       if (window.speechSynthesis) {
@@ -313,6 +363,28 @@ class VoiceCoachService {
     return this.isMuted;
   }
 
+  public setRate(rate: number) {
+    this.speechRate = Math.max(0.5, Math.min(2.0, Math.round(rate * 100) / 100));
+    if (typeof window !== "undefined") {
+      localStorage.setItem("foceye_voice_coach_rate", String(this.speechRate));
+    }
+  }
+
+  public getRate(): number {
+    return this.speechRate;
+  }
+
+  public setVolume(volume: number) {
+    this.speechVolume = Math.max(0.0, Math.min(1.0, Math.round(volume * 100) / 100));
+    if (typeof window !== "undefined") {
+      localStorage.setItem("foceye_voice_coach_volume", String(this.speechVolume));
+    }
+  }
+
+  public getVolume(): number {
+    return this.speechVolume;
+  }
+
   public getPromptText(key: VoicePromptKey, lang?: SupportedLanguage): string {
     const activeLang = lang || this.currentLanguage;
     return VOICE_TRANSLATIONS[activeLang]?.[key] || VOICE_TRANSLATIONS.en[key];
@@ -350,9 +422,9 @@ class VoiceCoachService {
 
       const langMeta = this.getLanguageOption();
       utterance.lang = langMeta.bcp47;
-      utterance.rate = 0.95; // Clear clinical pace
+      utterance.rate = this.speechRate; // User-controlled clinical pace
       utterance.pitch = 1.0;
-      utterance.volume = 1.0;
+      utterance.volume = this.speechVolume; // User-controlled volume
 
       // Keep active reference to avoid premature garbage collection on mobile Chrome
       this.activeUtterance = utterance;
