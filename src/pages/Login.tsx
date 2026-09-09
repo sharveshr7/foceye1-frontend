@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { useNavigate, useLocation, Link } from "react-router-dom";
-import { Eye, EyeOff, Mail, Lock, ArrowRight, Loader2, AlertCircle } from "lucide-react";
+import { Eye, EyeOff, Mail, Lock, ArrowRight, Loader2, AlertCircle, ShieldCheck, Sparkles } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
@@ -12,6 +12,7 @@ export default function Login() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [rememberMe, setRememberMe] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -44,7 +45,7 @@ export default function Login() {
     setSubmitting(true);
 
     try {
-      await login({ email: email.trim(), password });
+      await login({ email: email.trim(), password, rememberMe });
       toast.success("Authenticated successfully! Loading clinical dashboard...");
       navigate(redirectPath, { replace: true });
     } catch (cause: unknown) {
@@ -54,6 +55,12 @@ export default function Login() {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleFillDemo = (demoEmail: string, demoPass: string) => {
+    setEmail(demoEmail);
+    setPassword(demoPass);
+    setError("");
   };
 
   return (
@@ -83,6 +90,33 @@ export default function Login() {
               <span>{error}</span>
             </div>
           )}
+
+          {/* Quick Demo Credentials */}
+          <div className="p-3 rounded-xl bg-muted/30 border border-border/60 space-y-2">
+            <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+              <span className="flex items-center gap-1.5">
+                <Sparkles size={12} className="text-primary" />
+                Quick Clinical Presets
+              </span>
+              <span className="text-[10px] text-muted-foreground/80 font-normal">Click to autofill</span>
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => handleFillDemo("dr.smith@foceye.clinic", "Password123!")}
+                className="flex-1 py-1.5 px-2 bg-background hover:bg-muted border border-border rounded-lg text-xs font-semibold text-foreground transition-all hover:border-primary/40 text-center"
+              >
+                Dr. Smith (Doctor)
+              </button>
+              <button
+                type="button"
+                onClick={() => handleFillDemo("admin@foceye.clinic", "Password123!")}
+                className="flex-1 py-1.5 px-2 bg-background hover:bg-muted border border-border rounded-lg text-xs font-semibold text-foreground transition-all hover:border-primary/40 text-center"
+              >
+                Admin Station
+              </button>
+            </div>
+          </div>
 
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
@@ -126,6 +160,21 @@ export default function Login() {
               </div>
             </div>
 
+            <div className="flex items-center justify-between text-xs pt-1">
+              <label className="flex items-center gap-2 cursor-pointer text-muted-foreground hover:text-foreground">
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                  className="rounded border-border text-primary focus:ring-primary/20"
+                />
+                <span>Remember this clinical terminal</span>
+              </label>
+              <span className="text-muted-foreground/60 text-[11px] flex items-center gap-1">
+                <ShieldCheck size={13} className="text-emerald-500" /> End-to-End Encrypted
+              </span>
+            </div>
+
             <button
               type="submit"
               disabled={submitting}
@@ -154,3 +203,4 @@ export default function Login() {
     </div>
   );
 }
+

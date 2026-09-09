@@ -11,6 +11,8 @@ import {
   KeyRound,
   Laptop,
   LockKeyhole,
+  Eye,
+  EyeOff,
   Plus,
   Shield,
   Trash2,
@@ -47,6 +49,7 @@ import {
 import { authService } from "@/services/auth.service";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+import { ApiClient } from "@/services/api.client";
 import { DataBackupModal } from "@/components/settings/DataBackupModal";
 import { voiceCoach, type SupportedLanguage, SUPPORTED_LANGUAGES } from "@/utils/voiceCoach";
 
@@ -143,6 +146,43 @@ export default function SettingsPage() {
   const [staffToDelete, setStaffToDelete] = useState<StaffMember | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [isBackupModalOpen, setIsBackupModalOpen] = useState(false);
+  const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [updatingPassword, setUpdatingPassword] = useState(false);
+  const [showCurrentPass, setShowCurrentPass] = useState(false);
+  const [showNewPass, setShowNewPass] = useState(false);
+
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentPassword) {
+      toast.error("Please enter your current password.");
+      return;
+    }
+    if (newPassword.length < 8) {
+      toast.error("New password must be at least 8 characters long.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast.error("New passwords do not match.");
+      return;
+    }
+    setUpdatingPassword(true);
+    try {
+      await authService.changePassword(currentPassword, newPassword);
+      toast.success("Clinician password updated successfully!");
+      setIsPasswordModalOpen(false);
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to update password.";
+      toast.error(msg);
+    } finally {
+      setUpdatingPassword(false);
+    }
+  };
 
   // Form State
   const [formData, setFormData] = useState<StaffInput>({
@@ -202,7 +242,7 @@ export default function SettingsPage() {
     setIsPinging(true);
     const start = performance.now();
     try {
-      const res = await fetch("http://127.0.0.1:8000/api/v1/telemetry/stats");
+      const res = await fetch(`${ApiClient.getBaseUrl()}/telemetry/stats`);
       const elapsed = Math.round(performance.now() - start);
       if (res.ok) {
         const data = await res.json();
@@ -976,6 +1016,19 @@ export default function SettingsPage() {
         </SettingRow>
 
         <SettingRow
+          title="Update Account Password"
+          description="Change your clinical station authentication credentials with secure encryption"
+        >
+          <button
+            type="button"
+            onClick={() => setIsPasswordModalOpen(true)}
+            className="px-3.5 py-1.5 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
+          >
+            <KeyRound size={14} /> Change Password
+          </button>
+        </SettingRow>
+
+        <SettingRow
           title="Active Clinician Session"
           description="Sign out of this clinical terminal and clear cached authentication tokens"
         >
@@ -1236,6 +1289,135 @@ export default function SettingsPage() {
         onClose={() => setIsBackupModalOpen(false)}
         onDataRestored={() => fetchStaff()}
       />
+
+      {/* MODAL: CHANGE PASSWORD */}
+      <AnimatePresence>
+        {isPasswordModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs font-outfit">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-card w-full max-w-md rounded-3xl border border-border shadow-2xl p-6 sm:p-8 space-y-6"
+            >
+              <div className="flex items-center justify-between border-b border-border/60 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-10 h-10 rounded-2xl bg-primary/10 text-primary flex items-center justify-center">
+                    <KeyRound size={20} />
+                  </div>
+                  <div>
+                    <h3 className="font-extrabold text-lg text-foreground">
+                      Update Account Password
+                    </h3>
+                    <p className="text-xs text-muted-foreground">
+                      Update your clinician login credentials securely.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsPasswordModalOpen(false)}
+                  className="p-1.5 rounded-xl hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <form onSubmit={handleChangePassword} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1.5">
+                    Current Password
+                  </label>
+                  <div className="relative">
+                    <LockKeyhole size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                    <input
+                      type={showCurrentPass ? "text" : "password"}
+                      value={currentPassword}
+                      onChange={(e) => setCurrentPassword(e.target.value)}
+                      placeholder="••••••••"
+                      required
+                      className="w-full pl-10 pr-10 py-2.5 bg-muted/40 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 text-foreground"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowCurrentPass(!showCurrentPass)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    >
+                      {showCurrentPass ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1.5">
+                    New Password
+                  </label>
+                  <div className="relative">
+                    <LockKeyhole size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                    <input
+                      type={showNewPass ? "text" : "password"}
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      placeholder="Minimum 8 characters"
+                      required
+                      minLength={8}
+                      className="w-full pl-10 pr-10 py-2.5 bg-muted/40 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 text-foreground"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowNewPass(!showNewPass)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    >
+                      {showNewPass ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+                  {newPassword && newPassword.length < 8 && (
+                    <p className="text-[11px] text-destructive mt-1">Must be at least 8 characters</p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1.5">
+                    Confirm New Password
+                  </label>
+                  <div className="relative">
+                    <LockKeyhole size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                    <input
+                      type="password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      placeholder="Re-enter new password"
+                      required
+                      className="w-full pl-10 pr-3.5 py-2.5 bg-muted/40 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 text-foreground"
+                    />
+                  </div>
+                  {confirmPassword && confirmPassword !== newPassword && (
+                    <p className="text-[11px] text-destructive mt-1">Passwords do not match</p>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-end gap-3 pt-4 border-t border-border/60">
+                  <button
+                    type="button"
+                    onClick={() => setIsPasswordModalOpen(false)}
+                    className="px-4 py-2.5 rounded-xl border border-border text-foreground font-semibold text-sm hover:bg-muted transition-colors cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={updatingPassword || newPassword.length < 8 || newPassword !== confirmPassword}
+                    className="px-6 py-2.5 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-sm shadow-md shadow-primary/20 transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                  >
+                    {updatingPassword && <Loader2 size={16} className="animate-spin" />}
+                    Save New Password
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }

@@ -10,6 +10,7 @@ interface AuthContextType {
   signup: (data: SignupData) => Promise<UserProfile>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
+  changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -23,7 +24,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const verifyInitialSession = async () => {
       const token = ApiClient.getToken();
-      if (token) {
+      if (token && !ApiClient.isExpired(token)) {
         try {
           const profile = await authService.me();
           if (isMounted && profile) {
@@ -35,12 +36,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
         }
       } else {
+        if (token && ApiClient.isExpired(token)) {
+          authService.logout();
+        }
         if (isMounted) setUser(null);
       }
       if (isMounted) setIsLoading(false);
     };
 
     verifyInitialSession();
+
+    // Periodic watchdog to detect expired tokens
+    const interval = setInterval(() => {
+      const token = ApiClient.getToken();
+      if (token && ApiClient.isExpired(token)) {
+        authService.logout();
+        if (isMounted) setUser(null);
+      }
+    }, 60000);
 
     // Listen for 401 unauthorized events from ApiClient
     const handleUnauthorized = () => {
@@ -52,6 +65,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     return () => {
       isMounted = false;
+      clearInterval(interval);
       window.removeEventListener("foceye:unauthorized", handleUnauthorized);
     };
   }, []);
@@ -80,16 +94,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(profile);
   };
 
+  const changePassword = async (currentPassword: string, newPassword: string): Promise<void> => {
+    await authService.changePassword(currentPassword, newPassword);
+  };
+
   return (
     <AuthContext.Provider
       value={{
         user,
-        isAuthenticated: Boolean(user && ApiClient.getToken()),
+        isAuthenticated: Boolean(user && ApiClient.getToken() && !ApiClient.isExpired(ApiClient.getToken())),
         isLoading,
         login,
         signup,
         logout,
         refreshUser,
+        changePassword,
       }}
     >
       {children}

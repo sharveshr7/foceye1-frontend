@@ -27,10 +27,46 @@ export class ApiClient {
     }
   }
 
+  static isExpired(token: string | null): boolean {
+    if (!token) return true;
+    try {
+      const parts = token.split('.');
+      if (parts.length < 2) {
+        if (token.startsWith('local_jwt_')) {
+          const ts = parseInt(token.replace('local_jwt_', ''), 10);
+          return Date.now() - ts > 24 * 3600 * 1000;
+        }
+        return false;
+      }
+      const base64Url = parts[1];
+      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+      const jsonPayload = decodeURIComponent(
+        atob(base64)
+          .split('')
+          .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+          .join('')
+      );
+      const payload = JSON.parse(jsonPayload);
+      if (typeof payload.exp === 'number') {
+        return payload.exp <= Math.floor(Date.now() / 1000);
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  }
+
   static getToken(): string | null {
     if (!this.token) {
       this.token =
         localStorage.getItem('foceye_auth_token') || localStorage.getItem('foceye_token');
+    }
+    if (this.token && this.isExpired(this.token)) {
+      this.setToken(null);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('foceye:unauthorized'));
+      }
+      return null;
     }
     return this.token;
   }
